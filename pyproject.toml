@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "df-image-search-engine"
+version = "0.1.0"
+description = "This repository demonstrates a Proof of Concept (PoC) for an advanced Image Similarity Search Engine tailored for private datasets. Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images, making it ideal for applications in fields such as media management, content moderation, and digital asset organization."
+authors = ["Armananta Bastian"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+streamlit = "^1.39.0"
+sentence-transformers = "^3.2.1"
+python-dotenv = "^1.0.1"
+motor = "^3.6.0"
+streamlit-tags = "^1.2.8"
+pydantic = "^2.9.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

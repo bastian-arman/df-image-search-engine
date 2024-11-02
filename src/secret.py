@@ -1,0 +1,14 @@
+import os
+from dotenv import load_dotenv
+
+"""
+Stored for all .env credentials.
+"""
+
+load_dotenv()
+
+MONGOODB_USERNAME=os.getenv("MONGOODB_USERNAME")
+MONGODB_PASSWORD=os.getenv("MONGODB_PASSWORD")
+MONGODB_DATABASE=os.getenv("MONGODB_DATABASE")
+MONGOEXPRESS_ADMINUSERNAME=os.getenv("MONGOEXPRESS_ADMINUSERNAME")
+MONGOEXPRESS_ADMINPASSWORD=os.getenv("MONGOEXPRESS_ADMINPASSWORD")
