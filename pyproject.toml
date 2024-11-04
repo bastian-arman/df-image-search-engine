@@ -14,6 +14,7 @@ python-dotenv = "^1.0.1"
 motor = "^3.6.0"
 streamlit-tags = "^1.2.8"
 pydantic = "^2.9.2"
+synology-api = "^0.7.3"
 
 
 [build-system]

@@ -5,143 +5,126 @@ import asyncio
 import torch
 import streamlit as st
 from PIL import Image
-from torch import Tensor
-from utils.corpus import predefined_corpus
-from src.database.connection import db_connection
-from streamlit_tags import st_tags
+from utils.logger import logging
 from transformers import CLIPProcessor, CLIPModel
 from torch.nn.functional import cosine_similarity
 from sentence_transformers import SentenceTransformer, util
+from utils.nas_connection import nas_connector
 
 st.set_page_config(
-    layout="wide",
-    page_title="Dfactory Image Similarity Search"
+    layout='wide',
+    page_title='Dfactory Image Similarity Search'
 )
 
 
-if "safe_to_upload" not in st.session_state:
-    st.session_state.safe_to_upload = False
-# st.write(st.session_state)
+if 'execute_using_cuda_cores' not in st.session_state:
+    st.session_state['execute_using_cuda_cores'] = True
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
+if 'cuda_memory' not in st.session_state:
+    st.session_state['cuda_memory'] = 0
+
+
+def _check_gpu_memory(threshold: float = 0.75) -> str:
+    """
+    Check CUDA cores memory usage and return 
+    cuda or cpu based on defined threshold. 
+    """
+    try:
+        if torch.cuda.is_available():
+            logging.info("CUDA cores available.")
+            total_memory = torch.cuda.get_device_properties(0).total_memory
+            allocated_memory = torch.cuda.memory_allocated(0)
+            usage_ratio = allocated_memory / total_memory
+
+            if usage_ratio < threshold:
+                return "cuda"
+    except Exception as E:
+        return f"Error while checking gpu memory: {E}"
+    
+    return "cpu"
+
+device = _check_gpu_memory()
+
+async def _check_multisearch() -> bool:
+    """Checks if both search methods are used, returning True if so to disable the search button."""
+    if st.session_state['image_description'] and st.session_state["image_uploader"]:
+        logging.error("Error multi-method.")
+        st.error("Error multi-method: Only one search method should be selected.")
+        return True
+    elif not st.session_state['image_description'] and not st.session_state["image_uploader"]:
+        logging.warning("No data inputted.")
+        st.warning("Warning: Please upload data or fill image description for performing image search.")
+        return False
+    st.success("Success input data.")
+    return False
+
 
 @st.cache_resource
-def load_clip_model() -> tuple[CLIPModel, CLIPProcessor]:
-    try:
-        clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    except Exception as E:
-        st.error(f"Error load_clip_model: {E}")
-    return clip_model, processor
+def _load_vit_model(model: str = "clip-ViT-B-16") -> SentenceTransformer: 
+    """
+    Load Visual Transformers model. 
+    You chould change model param into down bellow.
 
-@st.cache_resource
-def load_vit_model() -> SentenceTransformer: 
+    Model 	        Top 1 Performance
+    clip-ViT-B-32 	63.3
+    clip-ViT-B-16 	68.1
+    clip-ViT-L-14 	75.4
+    """
     try:
-        model = SentenceTransformer(model_name_or_path="clip-ViT-B-16", device=device)
+        model = SentenceTransformer(model_name_or_path=model, device=device)
     except Exception as E:
-        st.error(f"Error load_vit_model: {E}")
+        st.error(f'Error load_vit_model: {E}')
     return model
 
-clip_model, processor = load_clip_model()
-
-def validate_total_files(data: list) -> None:
-    accepted_files = 5
-    total_files = len(data)
-
-    if total_files == 0:
-        st.session_state.safe_to_upload = False
-        st.warning("Please upload your data.")
-    elif total_files <= accepted_files:
-        st.session_state.safe_to_upload = True
-        st.success("File successfully uploaded.")
-    else:
-        excess_files = total_files - accepted_files
-        st.session_state.safe_to_upload = False
-        st.error(f"Max file accepted is {accepted_files}. "
-                 f"You have uploaded {total_files} files. "
-                 f"Please delete {excess_files} file(s) to proceed.")
-
-async def preprocess_incoming_data(incoming_data: list) -> list:
-    images = []
-    for file in incoming_data:
-        image = Image.open(file).convert("RGB")
-        images.append(image)
-    return images
-
-async def predict_image_tag(images: list) -> list:
-    try:
-        inputs = processor(text=predefined_corpus, images=images, return_tensors="pt", padding=True).to(device)
-        outputs = clip_model(**inputs)
-        
-        image_embeds = outputs.image_embeds
-        text_embeds = outputs.text_embeds
-        
-        predictions = []
-        for i, image_embed in enumerate(image_embeds):
-            cos_scores = cosine_similarity(image_embed.unsqueeze(0), text_embeds).squeeze()
-            top5_indices = torch.topk(cos_scores, 5).indices
-            top5_labels = [(predefined_corpus[idx], cos_scores[idx].item()) for idx in top5_indices]
-            predictions.append(top5_labels)
-        
-        return predictions
-    except Exception as E:
-        st.error(f"Error predicting image tag: {E}")
 
 async def main():
+    """
+    Main function for streamlit run in asynchronous mode.
+    """
     with st.sidebar:
-        st.header("Image Similarity Search Engine")
-        initialize_method = st.selectbox(
-            label="Select mode",
-            options=("Search data", "Upload data")
-        )
-        
-        with st.expander("See documentation"):
-            if initialize_method == "Search data":
-                st.write("In Search mode, you can find images by either describing what you're looking for or by uploading an image that resembles the one you want to find. This helps you quickly locate visually similar images.")
-            else:
-                st.write("In Upload mode, you can add new images to our collection. These images will be saved in the database, helping to create a richer dataset that improves search results in the future.")
-
-
-
+        st.header('Image Similarity Search Engine')
         st.divider()
-        st.subheader("Project Overview")
+        st.subheader('Project Overview')
         st.write(
-            """
-            This project demonstrates a **Proof of Concept (PoC)** for an advanced Image Similarity Search Engine tailored for private datasets. 
+            '''
+            This project demonstrates a ***Proof of Concept (PoC)*** for an advanced Image Similarity Search Engine tailored for private datasets. 
             Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images, 
             making it ideal for applications in fields such as media management, content moderation, and digital asset organization.
-            """
+            '''
         )
         st.divider()
+    
+    col1, col2 =  st.columns(2)
 
-    if initialize_method == "Search data":
-        image_description = st.text_area(label="Input image description")
-    else:
-        upload_data = st.file_uploader(
+    with col1:
+        st.write("Search data by image")
+        image_uploader = st.file_uploader(
             label="Choose image file",
-            type=["jpg", "jpeg", "png"],
-            accept_multiple_files=True,
-            help="Supported for uploading data with single or multiple image files with extensions such as .jpeg, .jpg, .png"
+            help="Accepted only 1 image data with extensions such as .jpeg, .jpg, .png",
+            key="image_uploader",
+            type=["jpeg", "jpg", "png"]
         )
 
-        validate_total_files(data=upload_data)
+    with col2:
+        st.write("Search data by text")
+        image_description = st.text_area(
+            label="Input image description", 
+            help="Describe the image you want to search.",
+            key="image_description",
+        )
 
-        if st.session_state.safe_to_upload and upload_data:
-            search_by_keyword = st.checkbox(
-                label="Activate search by keyword",
-                value=True
-            )
-            save_data = st.button(
-                label="Save data",
-                type="primary",
-                help="Save tagged image into database."
-            )
+    disable_search = await _check_multisearch()
 
-            cols = st.columns(4)
-            for i, img in enumerate(upload_data):
-                with cols[i % 4]:
-                    st.image(image=img, caption=img.name, use_column_width=True)
+    search_data = st.button(
+        label='Search',
+        type='primary',
+        help='Search current data into similar image.',
+        disabled=disable_search
+    )
+    
+    st.write(st.session_state)
+    # st.write(image_description)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     asyncio.run(main())
