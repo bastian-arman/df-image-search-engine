@@ -1,25 +1,23 @@
 # README #
 
 ## What is this repostory for? ##
-This repository demonstrates a Proof of Concept (PoC) for an advanced Image Similarity Search Engine tailored for private datasets. Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images, making it ideal for applications in fields such as media management, content moderation, and digital asset organization.
+This repository demonstrates a Proof of Concept (PoC) for an advanced Image Similarity Search Engine tailored for private datasets. Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
 
 
 ## Project Structures ##
 ```
-script\                     # Shell script folder.
-├──run_server.sh            # Shell script for starting streamlit server.
-├──init.sh                  # Shell script for project initialize.
-├──setup.sh                 # Shell script for installing project setup.
-src\                        # Root folder.
-├──main.py                  # Stored of main streamlit application.
-├──secret.py                # Stored of all secret on .env.
-│   ├──database\            # Stored of databases connection.
-│   │   ├──connection.py    # Stored of database connection.
-│   ├──schema\              # Stored of data format serialized by pydantic.
-│   │   ├──format_data.py   # Pydantic response model.
-│   ├──utils\               # Stored of list utilites based on project needs.
-│   │   ├──corpus.py        # Stored of initial corpus for image tagging.
-pyproject.toml              # Stored of all library based on project requirement.
+script\                         # Shell script folder.
+├──run_server.sh                # Shell script for starting streamlit server.
+├──init.sh                      # Shell script for project initialize.
+├──setup.sh                     # Shell script for installing project setup.
+src\                            # Root folder.
+├──main.py                      # Stored of main streamlit application.
+├──secret.py                    # Stored of all secret on .env.
+│   ├──utils\                   # Stored of list utilites based on project needs.
+│   │   ├──helper.py            # Stored all helper for the project.
+│   │   ├──logger.py            # Create logging for better tracking an error.
+│   │   ├──nas_connection.py    # Integrate local streamlit server into NAS server. 
+pyproject.toml                  # Stored of all library based on project requirement.
 ```
 
 # Project Setup Instructions

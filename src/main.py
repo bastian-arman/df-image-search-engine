@@ -5,11 +5,14 @@ import asyncio
 import torch
 import streamlit as st
 from PIL import Image
+import numpy as np
+from io import BytesIO
 from utils.logger import logging
 from transformers import CLIPProcessor, CLIPModel
 from torch.nn.functional import cosine_similarity
 from sentence_transformers import SentenceTransformer, util
 from utils.nas_connection import nas_connector
+from src.secret import NAS_IP, NAS_PORT, NAS_USERNAME, NAS_PASSWORD
 
 st.set_page_config(
     layout='wide',
@@ -23,6 +26,24 @@ if 'execute_using_cuda_cores' not in st.session_state:
 if 'cuda_memory' not in st.session_state:
     st.session_state['cuda_memory'] = 0
 
+def grab_images_as_numpy(conn, share_name, folder_path, file_limit=10):
+    """Fetch up to `file_limit` images from `folder_path` on NAS `share_name` and convert to NumPy arrays."""
+    images = []
+    try:
+        file_list = conn.listPath(share_name, folder_path)
+        for file in file_list:
+            if file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                file_obj = BytesIO()
+                conn.retrieveFile(share_name, f"{folder_path}/{file.filename}", file_obj)
+                file_obj.seek(0)
+                image = Image.open(file_obj)
+                images.append(np.array(image))  # Convert PIL Image to NumPy array
+                if len(images) >= file_limit:
+                    break
+    except Exception as e:
+        logging.error(f"Error fetching images: {e}")
+    
+    return images
 
 def _check_gpu_memory(threshold: float = 0.75) -> str:
     """
@@ -88,8 +109,7 @@ async def main():
         st.write(
             '''
             This project demonstrates a ***Proof of Concept (PoC)*** for an advanced Image Similarity Search Engine tailored for private datasets. 
-            Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images, 
-            making it ideal for applications in fields such as media management, content moderation, and digital asset organization.
+            Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
             '''
         )
         st.divider()
@@ -123,7 +143,18 @@ async def main():
     )
     
     st.write(st.session_state)
-    # st.write(image_description)
+    # Initialize NAS connection and grab images if search button is pressed
+    if search_data:
+        conn = nas_connector(NAS_USERNAME, NAS_PASSWORD, NAS_IP)
+        if conn:
+            share_name = "Dfactory"
+            folder_path = "/test_bastian/2017"
+            image_arrays = grab_images_as_numpy(conn, share_name, folder_path)
+            
+            # Display images in Streamlit
+            st.subheader("Images from NAS")
+            for idx, img_array in enumerate(image_arrays):
+                st.image(img_array, caption=f"Image {idx+1}", use_column_width=True)
 
 
 if __name__ == '__main__':
