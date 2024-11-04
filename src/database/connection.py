@@ -1,4 +1,5 @@
 import sys
+import asyncio
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -26,19 +27,10 @@ async def db_connection(
         return f"An error occurred: {E}"
     return collection
 
-# async def insert_dummy_data(collection: str):
-#     dummy_data = {
-#         "tag_id": "test_tag_001",
-#         "description": "A test image description",
-#         "image_path": "/path/to/test/image.jpg",
-#         "embedding_data": [0.1, 0.2, 0.3, 0.4, 0.5]  # Example embedding vector
-#     }
-
-#     collection = await db_connection(collection_name=collection)
-#     result = await collection.insert_one(dummy_data)
-
-#     print(f"Inserted document with id: {result.inserted_id}")
+# async def main():
+#     conn = await db_connection(collection_name="delete_me", db_name="Test")
+#     async for document in conn.find({"image_path": {"$exists": True}}):
+#         print(document)
 
 # if __name__ == "__main__":
-#     collection_name = "tag_id"  # This should be the name of the collection you want to insert into
-#     asyncio.run(insert_dummy_data(collection=collection_name))
+#     asyncio.run(main())

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 class ImageData(BaseModel):
     created_at: datetime
+    filename: str
     image_path: str
     image_embedding: list
     image_tag: str

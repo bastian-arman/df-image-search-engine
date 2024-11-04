@@ -49,10 +49,15 @@ This project is developed with Python v3.12.3. To get started, you'll need to in
     sh scripts/run_server.sh
     ```
 
+4. **Access steamlit server**
+    ```
+    http://localhost:8501/
+    ```
+
 ## Notes
 - Ensure that docker-compose are running on your system.
 - The setup.sh script configures the virtual environment and installs all necessary dependencies.
-- The run_server.sh script starts the uvicorn server in debug mode for development purposes.
+- The run_server.sh script starts the streamlit server.
 according to the business processes.
 
 # Repo Owner? #
