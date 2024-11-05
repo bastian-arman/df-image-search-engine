@@ -3,6 +3,11 @@
 ## What is this repostory for? ##
 This repository demonstrates a Proof of Concept (PoC) for an advanced Image Similarity Search Engine tailored for private datasets. Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
 
+## Approach
+
+| ![CLIP](https://raw.githubusercontent.com/mlfoundations/open_clip/main/docs/CLIP.png) |
+|:--:|
+| Image Credit: https://github.com/openai/CLIP |
 
 ## Project Structures ##
 ```
