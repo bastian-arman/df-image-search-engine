@@ -10,7 +10,7 @@ This repository demonstrates a Proof of Concept (PoC) for an advanced Image Simi
 | Image Credit: https://github.com/openai/CLIP |
 
 ## Architecture Flow
-| ![CLIP](images/Architecture Flow.png) |
+| ![CLIP](https://github.com/bastian-arman/df-image-search-engine/blob/feature/global-nas/images/Architecture%20Flow.png) |
 |:--:|
 | Image Credit: https://github.com/bastian-arman/df-image-search-engine |
 
