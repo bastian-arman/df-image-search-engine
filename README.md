@@ -32,7 +32,7 @@ pyproject.toml                  # Stored of all library based on project require
 
 # Project Setup Instructions
 
-This project is developed with Python v3.12.3. To get started, you'll need to install Docker and Poetry.
+This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Python v3.12.3. To get started, you'll need to install Docker and Poetry.
 
 ## Prerequisites
 
@@ -63,7 +63,6 @@ This project is developed with Python v3.12.3. To get started, you'll need to in
     ```
 
 ## Notes
-- Ensure that docker-compose are running on your system.
 - The setup.sh script configures the virtual environment and installs all necessary dependencies.
 - The run_server.sh script starts the streamlit server.
 according to the business processes.

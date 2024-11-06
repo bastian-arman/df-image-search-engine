@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 from utils.logger import logging
 from PIL.Image import Image as PILImage
 from PIL import ImageOps, Image
@@ -81,7 +82,29 @@ async def _image_finder(
     return image_paths
 
 
-async def _preprocess_image(image: Image) -> PILImage | None:
+def _grab_all_images(root_path: str) -> list | None:
+    try:
+        image_extensions = {".jpg", ".jpeg", ".png"}
+        image_paths = [
+            str(path)
+            for path in Path(root_path).rglob("*")
+            if path.suffix.lower() in image_extensions
+        ]
+
+        if not image_paths:
+            logging.error(f"[_grab_all_images] No image files found in {root_path}")
+            return None
+
+    except Exception as e:
+        logging.error(
+            f"[_grab_all_images] Error occurred while grabbing all image data: {e}"
+        )
+        return None
+
+    return image_paths
+
+
+def _preprocess_image(image: Image) -> PILImage | None:
     """
     Preprocess image by resizing, grayscaling, and normalizing.
 
@@ -130,6 +153,22 @@ async def _normalize_embeddings(embeddings: Tensor) -> list | None:
         )
         return None
     return normalized_embeddings
+
+
+def _preprocessed_data(image_paths: list) -> list | None:
+    preprocessed_data = []
+
+    try:
+        for path in image_paths:
+            preprocessed = _preprocess_image(image=path)
+            preprocessed_data.append(preprocessed)
+        print(preprocessed_data)
+    except Exception as e:
+        logging.error(
+            f"[_retrieve_data] Error occured while retrieving data from NAS: {e}"
+        )
+        return None
+    return preprocessed_data
 
 
 async def _search_data(

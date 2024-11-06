@@ -49,7 +49,8 @@ def _check_gpu_memory(threshold: float = 0.75) -> str | None:
 
             if usage_ratio < threshold:
                 device = "cuda"
+            logging.info(f"Utilized cuda cores: {usage_ratio:.2f}")
     except Exception as E:
         logging.error(f"Error while checking gpu memory: {E}")
         return None
-    return device
+    return usage_ratio, device

@@ -20,7 +20,7 @@ model: str = "clip-ViT-B-32"
 model = SentenceTransformer(model_name_or_path=model, device=device)
 
 
-async def nas_connector(
+def nas_connector(
     username: str = NAS_USERNAME, password: str = NAS_PASSWORD, nas_ip: str = NAS_IP
 ) -> SMBConnection | None:
     try:
@@ -144,6 +144,29 @@ async def search_data(
     return similar_images
 
 
+async def _retrieve_data(
+    nas_connector: SMBConnection, service_name: str, image_paths: list
+) -> list | None:
+    preprocessed_data = []
+
+    try:
+        for path in image_paths:
+            file_obj = BytesIO()
+            nas_connector.retrieveFile(
+                service_name=service_name, path=path, file_obj=file_obj
+            )
+            file_obj.seek(0)
+            image = Image.open(file_obj)
+            preprocessed_data.append(await preprocess_image(image=image))
+
+    except Exception as e:
+        logging.error(
+            f"[_retrieve_data] Error occured while retrieving data from NAS: {e}"
+        )
+        return None
+    return preprocessed_data
+
+
 async def main():
     service_name = "Dfactory"
     root_dir = "test_bastian"
@@ -157,21 +180,24 @@ async def main():
             nas_connector=conn, service_name=service_name, image_dirs=list_dir
         )
 
-        processed_images = []
-        for image_paths in list_image:
-            file_obj = BytesIO()
-            conn.retrieveFile(
-                service_name=service_name, path=image_paths, file_obj=file_obj
-            )
-            file_obj.seek(0)
-            # print(file_obj)
-            image = Image.open(file_obj)
+        preprocessed_images = await _retrieve_data(
+            nas_connector=conn, service_name=service_name, image_paths=list_image
+        )
+        # processed_images = []
+        # for image_paths in list_image:
+        #     file_obj = BytesIO()
+        #     conn.retrieveFile(
+        #         service_name=service_name, path=image_paths, file_obj=file_obj
+        #     )
+        #     file_obj.seek(0)
+        #     # print(file_obj)
+        #     image = Image.open(file_obj)
 
-            processed_image = await preprocess_image(image)
-            processed_images.append(processed_image)
+        #     processed_image = await preprocess_image(image)
+        #     processed_images.append(processed_image)
 
         encoded_data = model.encode(
-            processed_images,
+            preprocessed_images,
             batch_size=8,
             convert_to_tensor=True,
             show_progress_bar=True,
