@@ -9,6 +9,11 @@ This repository demonstrates a Proof of Concept (PoC) for an advanced Image Simi
 |:--:|
 | Image Credit: https://github.com/openai/CLIP |
 
+## Architecture Flow
+| ![CLIP](https://github.com/bastian-arman/df-image-search-engine/blob/feature/global-nas/images/Architecture%20Flow.png) |
+|:--:|
+| Image Credit: https://github.com/bastian-arman/df-image-search-engine |
+
 ## Project Structures ##
 ```
 script\                         # Shell script folder.
@@ -21,13 +26,13 @@ src\                            # Root folder.
 │   ├──utils\                   # Stored of list utilites based on project needs.
 │   │   ├──helper.py            # Stored all helper for the project.
 │   │   ├──logger.py            # Create logging for better tracking an error.
-│   │   ├──nas_connection.py    # Integrate local streamlit server into NAS server. 
+│   │   ├──nas_connection.py    # Integrate local streamlit server into NAS server.
 pyproject.toml                  # Stored of all library based on project requirement.
 ```
 
 # Project Setup Instructions
 
-This project is developed with Python v3.12.3. To get started, you'll need to install Docker and Poetry.
+This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Python v3.12.3. To get started, you'll need to install Docker and Poetry.
 
 ## Prerequisites
 
@@ -58,7 +63,6 @@ This project is developed with Python v3.12.3. To get started, you'll need to in
     ```
 
 ## Notes
-- Ensure that docker-compose are running on your system.
 - The setup.sh script configures the virtual environment and installs all necessary dependencies.
 - The run_server.sh script starts the streamlit server.
 according to the business processes.
