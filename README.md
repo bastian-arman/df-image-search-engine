@@ -9,6 +9,11 @@ This repository demonstrates a Proof of Concept (PoC) for an advanced Image Simi
 |:--:|
 | Image Credit: https://github.com/openai/CLIP |
 
+## Architecture Flow
+| ![CLIP](images/Architecture Flow.png) |
+|:--:|
+| Image Credit: https://github.com/bastian-arman/df-image-search-engine |
+
 ## Project Structures ##
 ```
 script\                         # Shell script folder.
