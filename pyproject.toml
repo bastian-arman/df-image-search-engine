@@ -16,6 +16,8 @@ streamlit-tags = "^1.2.8"
 pydantic = "^2.9.2"
 synology-api = "^0.7.3"
 pysmb = "^1.2.10"
+ruff = "^0.7.2"
+pre-commit = "^4.0.1"
 
 
 [build-system]
