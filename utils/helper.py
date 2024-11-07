@@ -1,18 +1,22 @@
 import sys
-import numpy as np
 import streamlit as st
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from pathlib import Path
 from utils.logger import logging
 from PIL.Image import Image as PILImage
 from PIL import ImageOps, Image
+from numpy import ndarray
+from numpy.linalg import norm
+from numpy import isnan
 from sentence_transformers import util
 from torch import Tensor
 
 
 def _setup_sidebar() -> None:
+    """
+    Create sidebar project description.
+    """
     try:
         with st.sidebar:
             st.header("Image Similarity Search Engine")
@@ -31,6 +35,15 @@ def _setup_sidebar() -> None:
 
 
 def _grab_all_images(root_path: str) -> list | None:
+    """
+    Recursively extracting all image path based on root path dir.
+
+    Parameters:
+    - root_path: Root directory for searching image data.
+
+    Returns:
+    - List of all image data in extention jpg, jpeg, png.
+    """
     try:
         image_extensions = {".jpg", ".jpeg", ".png"}
         image_paths = [
@@ -54,7 +67,7 @@ def _grab_all_images(root_path: str) -> list | None:
 
 def _preprocess_image(image: Image) -> PILImage | None:
     """
-    Preprocess image by resizing, grayscaling, and normalizing.
+    Preprocess image by resizing, grayscaling, and normalizing etc.
 
     Parameters:
     - image: Converted image into numpy type.
@@ -66,7 +79,8 @@ def _preprocess_image(image: Image) -> PILImage | None:
         image = ImageOps.fit(image, (224, 224))
         image = ImageOps.grayscale(image)
         image = ImageOps.autocontrast(image)
-        image = ImageOps.invert(image)
+        image = ImageOps.flip(image)
+        image = ImageOps.expand(image)
         image = ImageOps.mirror(image)
     except Exception as e:
         logging.error(f"[_preprocess_image] Error while preprocessing an image: {e}")
@@ -74,9 +88,15 @@ def _preprocess_image(image: Image) -> PILImage | None:
     return image
 
 
-def _normalize_embeddings(embeddings: Tensor | np.ndarray) -> np.ndarray | None:
+def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
+    """
+    Normalize embedding tensor from range 1 into -1
+
+    Parameters:
+    - embeddings: Tensor or
+    """
     try:
-        if not isinstance(embeddings, (Tensor, np.ndarray)):
+        if not isinstance(embeddings, (Tensor, ndarray)):
             logging.error(
                 f"Expected embeddings to be Tensor or ndarray, got {type(embeddings)}"
             )
@@ -85,7 +105,7 @@ def _normalize_embeddings(embeddings: Tensor | np.ndarray) -> np.ndarray | None:
         if isinstance(embeddings, Tensor) and embeddings.device.type == "cuda":
             embeddings = embeddings.cpu()
 
-        embedding_norms = np.linalg.norm(
+        embedding_norms = norm(
             x=embeddings.detach().numpy()
             if isinstance(embeddings, Tensor)
             else embeddings,
@@ -98,7 +118,7 @@ def _normalize_embeddings(embeddings: Tensor | np.ndarray) -> np.ndarray | None:
             if isinstance(embeddings, Tensor)
             else embeddings / embedding_norms
         )
-        normalized_embeddings[np.isnan(normalized_embeddings)] = 0
+        normalized_embeddings[isnan(normalized_embeddings)] = 0
     except Exception as e:
         logging.error(
             f"[_normalize_embeddings] Error while normalizing embedding dims: {e}"

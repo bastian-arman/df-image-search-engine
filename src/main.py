@@ -163,11 +163,8 @@ async def main() -> None:
             if image_file:
                 query_image = _preprocess_image(Image.open(image_file))
                 query_emb = model.encode([query_image], convert_to_tensor=True)
-            elif text_query:
-                query_emb = model.encode([text_query], convert_to_tensor=True)
             else:
-                st.warning("Please provide either an image or a text description.")
-                return
+                query_emb = model.encode([text_query], convert_to_tensor=True)
 
             with st.spinner("Searching for similar images..."):
                 similar_images = await _search_data(
