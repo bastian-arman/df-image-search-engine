@@ -105,6 +105,8 @@ def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
     return encoded_data
 
 
+print(image_list[0])
+print(type(image_list[0]))
 encoded_data = _encode_data(image_paths=image_list)
 normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
