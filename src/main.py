@@ -36,7 +36,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-root_dir = "test_bastian"
+root_dir = "PREVIEW_IMAGE"
 start_time = datetime.now()
 image_list = _grab_all_images(root_path=f"mounted-nas-do-not-delete-data/{root_dir}")
 if "device" not in st.session_state:
@@ -44,7 +44,7 @@ if "device" not in st.session_state:
 
 
 @st.cache_resource
-def init_model(model: str = "clip-ViT-B-32") -> SentenceTransformer | None:
+def init_model(model: str = "clip-ViT-L-14") -> SentenceTransformer | None:
     """
     Load Visual Transformers model.
     This uses the CLIP model for encoding.
@@ -105,8 +105,6 @@ def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
     return encoded_data
 
 
-print(image_list[0])
-print(type(image_list[0]))
 encoded_data = _encode_data(image_paths=image_list)
 normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
@@ -149,8 +147,8 @@ async def main() -> None:
 
         disable_search = await _check_multisearch()
 
-        if image_file:
-            st.image(image=image_file)
+        if image_file and not disable_search:
+            st.image(image=image_file, width=500)
 
         search_button = st.button(
             label="Search",

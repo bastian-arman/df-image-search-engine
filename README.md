@@ -69,6 +69,7 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
 
 ## Notes
 - The setup.sh script configures the virtual environment and installs all necessary dependencies.
+- Ensure that you already mounted the NAS directory using mount_nas.sh.
 - The run_server.sh script starts the streamlit server.
 according to the business processes.
 
