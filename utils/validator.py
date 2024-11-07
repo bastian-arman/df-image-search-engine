@@ -53,4 +53,14 @@ def _check_gpu_memory(threshold: float = 0.75) -> str | None:
     except Exception as E:
         logging.error(f"Error while checking gpu memory: {E}")
         return None
-    return usage_ratio, device
+    return device
+
+
+def _update_device():
+    current_device = st.session_state["device"]
+    new_device = _check_gpu_memory()
+    if new_device != current_device:
+        st.session_state["device"] = new_device
+        logging.info(f"Device updated to: {new_device}")
+        return True
+    return False

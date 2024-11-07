@@ -1,85 +1,33 @@
+import sys
 import numpy as np
+import streamlit as st
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from pathlib import Path
 from utils.logger import logging
 from PIL.Image import Image as PILImage
 from PIL import ImageOps, Image
-from smb.SMBConnection import SMBConnection
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 from torch import Tensor
 
 
-async def _directory_finder(
-    nas_connector: SMBConnection, service_name: str, root_dir: str
-) -> list | None:
-    """
-    Recursively extract all directory to find dir path.
-
-    Parameters:
-    - nas_connector: NAS connection into streamlit server.
-    - service_name: First directory of NAS. (e.g: /Dfactory/test_bastian/...) 'Dfactory' is the service name.
-    - root_dir: Second directory of NAS. (e.g: /Dfactory/test_bastian/...) 'test_bastian' is the root dir.
-
-    Returns: List of all directory available inside root_dir
-    """
-    dir_path = [root_dir]
-
+def _setup_sidebar() -> None:
     try:
-        for root_dirs in dir_path:
-            path_list = nas_connector.listPath(
-                service_name=service_name, path=root_dirs
+        with st.sidebar:
+            st.header("Image Similarity Search Engine")
+            st.divider()
+            st.subheader("Project Overview")
+            st.write(
+                """
+                This project demonstrates a ***Proof of Concept (PoC)*** for an advanced Image Similarity Search Engine tailored for private datasets.
+                Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
+                """
             )
-            for path in path_list:
-                if path.isDirectory and path.filename not in (".", ".."):
-                    new_dir = f"{root_dirs}/{path.filename}"
-                    dir_path.append(new_dir)
-                    logging.info(f"Found directory: {new_dir}")
-        logging.info(f"Total dir found: {len(dir_path)}")
+            st.divider()
     except Exception as e:
-        logging.error(
-            f"[_directory_finder] Error while recursively finding directories: {e}"
-        )
-        return None
-    return dir_path
-
-
-async def _image_finder(
-    nas_connector: SMBConnection, service_name: str, image_dirs: list
-) -> list | None:
-    """
-    Recuresively extract list of all image data.
-
-    Parameters:
-    - nas_connector: NAS connection into streamlit server.
-    - service_name: First directory of NAS. (e.g: /Dfactory/test_bastian/...) 'Dfactory' is the service name.
-    - image_dirs: Last directory for finding an image.
-            (e.g:   /Dfactory/test_bastian/,
-                    /Dfactory/test_bastian/2019
-                    /Dfactory/test_bastian/2020
-                    /Dfactory/test_bastian/2020/a
-                    /Dfactory/test_bastian/2020/b
-                            .   .   .   .
-                    /Dfactory/test_bastian/2020/xxx)
-
-    Returns: List of all image inside all given directory.
-    """
-    image_paths = []
-
-    try:
-        for directory in image_dirs:
-            filepaths = nas_connector.listPath(
-                service_name=service_name, path=directory
-            )
-            for file in filepaths:
-                if file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    image_path = f"{service_name}/{directory}/{file.filename}"
-                    image_paths.append(image_path)
-                    logging.info(f"Found image: {image_path}")
-
-        logging.info(f"Total image found: {len(image_paths)}")
-    except Exception as e:
-        logging.error(f"[_image_finder] Error while finding images: {e}")
-        return None
-    return image_paths
+        logging.error(f"[_setup_sidebar] Error while setup sidebar: {e}")
+    return None
 
 
 def _grab_all_images(root_path: str) -> list | None:
@@ -126,26 +74,30 @@ def _preprocess_image(image: Image) -> PILImage | None:
     return image
 
 
-async def _normalize_embeddings(embeddings: Tensor) -> list | None:
-    """
-    Normalize embedding dimension into 0 as min value and 1 as max value.
-
-    Parameters:
-    - embeddings: Tensor data from encoded images.
-
-    Returns:
-    - Normalized embedding data.
-    """
-
+def _normalize_embeddings(embeddings: Tensor | np.ndarray) -> np.ndarray | None:
     try:
-        if embeddings.device.type == "cuda":
+        if not isinstance(embeddings, (Tensor, np.ndarray)):
+            logging.error(
+                f"Expected embeddings to be Tensor or ndarray, got {type(embeddings)}"
+            )
+            return None
+
+        if isinstance(embeddings, Tensor) and embeddings.device.type == "cuda":
             embeddings = embeddings.cpu()
 
         embedding_norms = np.linalg.norm(
-            x=embeddings.detach().numpy(), axis=1, keepdims=True
+            x=embeddings.detach().numpy()
+            if isinstance(embeddings, Tensor)
+            else embeddings,
+            axis=1,
+            keepdims=True,
         )
 
-        normalized_embeddings = embeddings.detach().numpy() / embedding_norms
+        normalized_embeddings = (
+            embeddings.detach().numpy() / embedding_norms
+            if isinstance(embeddings, Tensor)
+            else embeddings / embedding_norms
+        )
         normalized_embeddings[np.isnan(normalized_embeddings)] = 0
     except Exception as e:
         logging.error(
@@ -155,48 +107,32 @@ async def _normalize_embeddings(embeddings: Tensor) -> list | None:
     return normalized_embeddings
 
 
-def _preprocessed_data(image_paths: list) -> list | None:
-    preprocessed_data = []
-
-    try:
-        for path in image_paths:
-            preprocessed = _preprocess_image(image=path)
-            preprocessed_data.append(preprocessed)
-        print(preprocessed_data)
-    except Exception as e:
-        logging.error(
-            f"[_retrieve_data] Error occured while retrieving data from NAS: {e}"
-        )
-        return None
-    return preprocessed_data
-
-
 async def _search_data(
-    model: SentenceTransformer,
-    query: str,
+    query_emb: Tensor,
     encoded_data: Tensor,
     image_paths: list,
     return_data=10,
 ) -> list | None:
     """
-    Search for similar images given a text or image query.
+    Search for similar images based on a precomputed query embedding.
 
     Parameters:
-    - query: Text or image data for querying similar images.
+    - query_emb: The embedding of the query (text or image).
     - encoded_data: The embeddings of all images in the database.
     - image_paths: The paths of all images in the database, corresponding to the embeddings.
-    - k: Number of top similar images to return.
+    - return_data: Number of top similar images to return.
 
     Returns:
-    - List of tuples with the image path and similarity score for the top `k` similar images.
+    - List of tuples with the image path and similarity score for the top `return_data` similar images.
     """
     try:
-        query_emb = model.encode(
-            sentences=[query], convert_to_tensor=True, show_progress_bar=True
-        )
-        query_emb = await _normalize_embeddings(query_emb)
-        encoded_data = await _normalize_embeddings(encoded_data)
-        hits = util.semantic_search(query_emb, encoded_data, top_k=return_data)[0]
+        query_emb = _normalize_embeddings(embeddings=query_emb)
+        encoded_data = _normalize_embeddings(embeddings=encoded_data)
+        hits = util.semantic_search(
+            query_embeddings=query_emb,
+            corpus_embeddings=encoded_data,
+            top_k=return_data,
+        )[0]
         similar_images = [(image_paths[hit["corpus_id"]], hit["score"]) for hit in hits]
     except Exception as e:
         logging.error(f"[_search_data] Error while searching data: {e}")
