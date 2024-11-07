@@ -1,22 +1,26 @@
 import sys
+import os
+import asyncio
 import numpy as np
-from PIL import ImageOps, Image
-from PIL.Image import Image as PILImage
+import streamlit as st
+from PIL import Image
 from pathlib import Path
+from datetime import datetime
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import asyncio
-import streamlit as st
 from torch import Tensor
 from utils.logger import logging
-from sentence_transformers import SentenceTransformer, util
-from utils.validator import _check_multisearch, _check_gpu_memory
-from utils.helper import _grab_all_images
+from sentence_transformers import SentenceTransformer
+from utils.validator import _check_multisearch, _check_gpu_memory, _update_device
+from utils.helper import (
+    _grab_all_images,
+    _normalize_embeddings,
+    _preprocess_image,
+    _search_data,
+    _setup_sidebar,
+)
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
-
-# TODO: encapsulate each function for easier to debug when error occured.
-
 st.markdown(
     """
     <style>
@@ -32,16 +36,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-gpu_usage, device = _check_gpu_memory()
-
-if "execute_using_cuda_cores" not in st.session_state:
-    st.session_state["execute_using_cuda_cores"] = True
-
-if "cuda_memory" not in st.session_state:
-    st.session_state["cuda_memory"] = gpu_usage
-
-
-st.write(st.session_state)
+root_dir = "test_bastian"
+start_time = datetime.now()
+image_list = _grab_all_images(root_path=f"mounted-nas-do-not-delete-data/{root_dir}")
+if "device" not in st.session_state:
+    st.session_state["device"] = _check_gpu_memory()
 
 
 @st.cache_resource
@@ -56,103 +55,68 @@ def init_model(model: str = "clip-ViT-B-32") -> SentenceTransformer | None:
     |   clip-ViT-L-14 	|   75.4                |
     """
     try:
-        model = SentenceTransformer(model_name_or_path=model, device=device)
+        model = SentenceTransformer(
+            model_name_or_path=model, device=st.session_state["device"]
+        )
+        end_time = datetime.now()
+        logging.info(f"Elapsed model initialization process: {end_time-start_time}")
     except Exception as E:
         st.error(f"Error loading CLIP model: {E}")
         return None
     return model
 
 
-model = init_model()
-image_list = _grab_all_images(root_path="mounted-nas-do-not-delete-data/test_bastian")
-
-
-def normalize_embeddings(embeddings):
-    """Normalize embeddings to unit length, moving to CPU if necessary."""
-    if isinstance(embeddings, Tensor):
-        embeddings = (
-            embeddings.cpu().numpy()
-        )  # Move to CPU and convert to NumPy if it's a Tensor
-    norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    return embeddings / norm
-
-
-def preprocess_image(image: PILImage) -> PILImage:
-    """Preprocess image by resizing, grayscaling, and normalizing."""
-    image = ImageOps.fit(image, (224, 224))
-    image = ImageOps.grayscale(image)
-    image = ImageOps.autocontrast(image)
-    image = ImageOps.invert(image)
-    image = ImageOps.mirror(image)
-    return image
+if _update_device():
+    model = init_model()
+else:
+    model = init_model()
 
 
 @st.cache_data
-def encode_data(_images: list):
+def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
     """Encode and normalize data embeddings with preprocessing."""
-    processed_images = [preprocess_image(Image.open(path)) for path in _images]
-    encoded_data = model.encode(
-        processed_images,
-        batch_size=128,
-        convert_to_tensor=False,
-        show_progress_bar=True,
-    )
-    return normalize_embeddings(encoded_data)
-
-
-encoded_data = encode_data(_images=image_list)
-
-
-async def _search_data(
-    query_emb: Tensor,
-    encoded_data: Tensor,
-    image_paths: list,
-    return_data=10,
-) -> list | None:
-    """
-    Search for similar images based on a precomputed query embedding.
-
-    Parameters:
-    - query_emb: The embedding of the query (text or image).
-    - encoded_data: The embeddings of all images in the database.
-    - image_paths: The paths of all images in the database, corresponding to the embeddings.
-    - return_data: Number of top similar images to return.
-
-    Returns:
-    - List of tuples with the image path and similarity score for the top `return_data` similar images.
-    """
     try:
-        # Normalize embeddings
-        query_emb = normalize_embeddings(query_emb)
-        encoded_data = normalize_embeddings(encoded_data)
-        # Perform semantic search
-        hits = util.semantic_search(query_emb, encoded_data, top_k=return_data)[0]
-        # Retrieve similar image paths and scores
-        st.write(image_paths[hits[0]["corpus_id"]])
-        similar_images = [(image_paths[hit["corpus_id"]], hit["score"]) for hit in hits]
+        if not os.path.exists(path="cache"):
+            logging.info("Creating cache dir.")
+            os.makedirs(name="cache", exist_ok=True)
+
+        cache_file = f"cache/encoded_data_{root_dir}.npy"
+
+        if Path(cache_file).exists():
+            logging.info("Cache files already created.")
+            encoded_data = np.load(cache_file)
+        else:
+            logging.info("Creating cache encoding files.")
+            processed_images = [
+                _preprocess_image(Image.open(path)) for path in image_paths
+            ]
+            encoded_data = model.encode(
+                processed_images,
+                batch_size=batch_size,
+                convert_to_tensor=True,
+                show_progress_bar=True,
+            )
+            np.save(cache_file, encoded_data.cpu().numpy())
+        end_time = datetime.now()
+        logging.info(f"Elapsed encoding data process: {end_time-start_time}")
     except Exception as e:
-        logging.error(f"[_search_data] Error while searching data: {e}")
+        logging.error(f"[_encode_data] Error while encoding data: {e}")
         return None
-    return similar_images
+    return encoded_data
 
 
-async def main():
+print(image_list[0])
+print(type(image_list[0]))
+encoded_data = _encode_data(image_paths=image_list)
+normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
+
+
+async def main() -> None:
     """
     Main function for streamlit run in asynchronous mode.
     """
     try:
-        with st.sidebar:
-            st.header("Image Similarity Search Engine")
-            st.divider()
-            st.subheader("Project Overview")
-            st.write(
-                """
-                This project demonstrates a ***Proof of Concept (PoC)*** for an advanced Image Similarity Search Engine tailored for private datasets.
-                Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
-                """
-            )
-            st.divider()
-
+        _setup_sidebar()
         col1, col2 = st.columns(2)
 
         with col1:
@@ -172,18 +136,19 @@ async def main():
                 key="image_description",
             )
 
-        row_input = st.columns((1, 2, 2, 1))
+        row_input = st.columns((0.9, 2, 2, 1))
         with row_input[0]:
             num_results = st.number_input(
                 label="Total extracted data",
                 min_value=1,
                 max_value=100,
-                value=5,
+                value=10,
                 help="Total image retrieve data.",
                 key="total_retrieve",
             )
 
         disable_search = await _check_multisearch()
+
         if image_file:
             st.image(image=image_file)
 
@@ -196,42 +161,37 @@ async def main():
 
         if search_button:
             if image_file:
-                # Preprocess and encode the image
-                query_image = preprocess_image(Image.open(image_file))
+                query_image = _preprocess_image(Image.open(image_file))
                 query_emb = model.encode([query_image], convert_to_tensor=True)
-            elif text_query:
-                # Encode the text query
-                query_emb = model.encode([text_query], convert_to_tensor=True)
             else:
-                st.warning("Please provide either an image or a text description.")
-                return
+                query_emb = model.encode([text_query], convert_to_tensor=True)
 
-            # Perform the search
-            similar_images = await _search_data(
-                # model=model,
-                query_emb=query_emb,
-                encoded_data=encoded_data,
-                image_paths=image_list,
-                return_data=num_results,
-            )
+            with st.spinner("Searching for similar images..."):
+                similar_images = await _search_data(
+                    query_emb=query_emb,
+                    encoded_data=encoded_data,
+                    image_paths=image_list,
+                    return_data=num_results,
+                )
 
-            # Display results
             if similar_images:
-                st.write(similar_images)
                 st.write("### Similar Images Found")
-                for image_path, score in similar_images:
-                    st.image(
-                        image_path,
-                        caption=f"Score: {score:.4f}\nImage path : {image_path}",
-                    )
+                for i in range(0, len(similar_images), 4):
+                    cols = st.columns(4)
+                    for idx, (img_path, score) in enumerate(similar_images[i : i + 4]):
+                        with cols[idx]:
+                            st.image(
+                                image=img_path,
+                                use_column_width="always",
+                                caption=f"Image path: {img_path}",
+                            )
+                end_time = datetime.now()
+                logging.info(f"Elapsed time for search data: {end_time-start_time}")
             else:
                 st.error("No similar images found.")
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
-
-    # finally:
-    #     nas_connection.close()
-    #     logging.info("Closed SMB connection.")
+    return None
 
 
 if __name__ == "__main__":

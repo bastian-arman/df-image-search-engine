@@ -164,4 +164,5 @@ cython_debug/
 
 #utilities
 log_result.txt
-/mounted-nas-do-not-delete-data/
+cache/
+mounted-nas-do-not-delete-data/
