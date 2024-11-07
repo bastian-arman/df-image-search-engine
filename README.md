@@ -16,18 +16,23 @@ This repository demonstrates a Proof of Concept (PoC) for an advanced Image Simi
 
 ## Project Structures ##
 ```
-script\                         # Shell script folder.
-├──run_server.sh                # Shell script for starting streamlit server.
-├──init.sh                      # Shell script for project initialize.
-├──setup.sh                     # Shell script for installing project setup.
-src\                            # Root folder.
-├──main.py                      # Stored of main streamlit application.
-├──secret.py                    # Stored of all secret on .env.
-│   ├──utils\                   # Stored of list utilites based on project needs.
-│   │   ├──helper.py            # Stored all helper for the project.
-│   │   ├──logger.py            # Create logging for better tracking an error.
-│   │   ├──nas_connection.py    # Integrate local streamlit server into NAS server.
-pyproject.toml                  # Stored of all library based on project requirement.
+├──images\              # Directory to save image related to project.
+├──tests\               # Unit testing directory.
+├──script\              # Shell script directory.
+│   ├──run_server.sh    # Shell script for starting streamlit server.
+│   ├──init.sh          # Shell script for project initialize.
+│   ├──setup.sh         # Shell script for installing project setup.
+│   ├──run_test.sh      # Shell script for run all unit testing.
+│   ├──mount_nas.sh     # Shell script for umounting NAS directory.
+│   ├──umount_nas.sh    # Shell script for mounting NAS directory.
+├──src\                 # Root project directory.
+│   ├──main.py          # Stored of main streamlit application.
+│   ├──secret.py        # Stored of all secret on .env.
+├──utils\               # Stored of list utilites based on project needs.
+│   ├──helper.py        # Stored all helper for the project.
+│   ├──logger.py        # Create logging for better tracking an error.
+│   ├──validator.py     # Validate user request or input.
+pyproject.toml          # Stored of all library based on project requirement.
 ```
 
 # Project Setup Instructions
@@ -47,9 +52,9 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
     sh scripts/setup.sh
     ```
 
-2. **Start docker containers**
+2. **Mount NAS Directory**
     ```
-    docker-compose up
+    sh scripts/mount_nas.sh
     ```
 
 3. **Start the server script**
