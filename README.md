@@ -68,6 +68,7 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
 # Project Features
 - [x] Search similar images by uploading an image (image based).
 - [x] Search similar images by describing an image (text based).
+- [x] Auto encode when user uploading new data (10 image) into NAS.
 
 # Project Future Plan
 - [ ] Change the current framework into more propper framework (e.g: FastAPI, Flask, Django), resulting a service-based Image Search Engine API and integrate into front-end website.

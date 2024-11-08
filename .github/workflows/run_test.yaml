@@ -6,18 +6,20 @@ on:
 jobs:
   pre-merge:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.12
-    - uses: actions/setup-python@v3
-      with:
-        python-version: '3.12'
+      - uses: actions/checkout@v4
 
-    - name: Installing Poetry
-      run: pip install poetry
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.12'
 
-    - name: Installing Project Dependencies.
-      run: sh scripts/setup.sh
+      - name: Install Poetry
+        run: pip install poetry
 
-    - name: Run Testing.
-      run: sh scripts/run_test.sh
+      - name: Install Project Dependencies
+        run: sh scripts/setup.sh
+
+      - name: Run Unit Tests
+        run: sh scripts/run_test.sh
