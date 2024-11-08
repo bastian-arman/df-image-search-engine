@@ -44,7 +44,7 @@ if "device" not in st.session_state:
 
 
 @st.cache_resource
-def init_model(model: str = "clip-ViT-L-14") -> SentenceTransformer | None:
+def init_model(model: str = "clip-ViT-B-32") -> SentenceTransformer | None:
     """
     Load Visual Transformers model.
     This uses the CLIP model for encoding.

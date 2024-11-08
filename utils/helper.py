@@ -1,4 +1,6 @@
 import sys
+import random
+import string
 import streamlit as st
 from pathlib import Path
 
@@ -79,7 +81,7 @@ def _preprocess_image(image: Image) -> PILImage | None:
         image = ImageOps.fit(image, (224, 224))
         image = ImageOps.grayscale(image)
         image = ImageOps.autocontrast(image)
-        image = ImageOps.flip(image)
+        # image = ImageOps.flip(image)
         image = ImageOps.expand(image)
         image = ImageOps.mirror(image)
     except Exception as e:
@@ -158,3 +160,13 @@ async def _search_data(
         logging.error(f"[_search_data] Error while searching data: {e}")
         return None
     return similar_images
+
+
+def _random_word(length: int = 4) -> str:
+    if length < 1:
+        raise ValueError("length parameter should be more than 0")
+
+    alphabet = string.ascii_lowercase
+    word = "".join(random.choice(alphabet) for _ in range(length))
+
+    return word
