@@ -1,0 +1,23 @@
+name: pre-merge-unit-test
+on:
+  pull_request:
+    branches: [development]
+
+jobs:
+  pre-merge:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.12
+    - uses: actions/setup-python@v3
+      with:
+        python-version: '3.12'
+
+    - name: Installing Poetry
+      run: pip install poetry
+
+    - name: Installing Project Dependencies.
+      run: sh scripts/setup.sh
+
+    - name: Run Testing.
+      run: sh scripts/run_test.sh
