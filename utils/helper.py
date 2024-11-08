@@ -1,3 +1,4 @@
+import os
 import sys
 import random
 import string
@@ -47,6 +48,12 @@ def _grab_all_images(root_path: str) -> list | None:
     - List of all image data in extention jpg, jpeg, png.
     """
     try:
+        if not os.path.exists(path=root_path):
+            logging.error(
+                f"[_grab_all_images] Directory {root_path} not available, make sure its available in projects directory."
+            )
+            return None
+
         image_extensions = {".jpg", ".jpeg", ".png"}
         image_paths = [
             str(path)
@@ -131,7 +138,7 @@ def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
 
 async def _search_data(
     query_emb: Tensor,
-    encoded_data: Tensor,
+    encoded_data: ndarray,
     image_paths: list,
     return_data=10,
 ) -> list | None:

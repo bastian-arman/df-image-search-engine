@@ -39,8 +39,17 @@ st.markdown(
 root_dir = "PREVIEW_IMAGE"
 start_time = datetime.now()
 image_list = _grab_all_images(root_path=f"mounted-nas-do-not-delete-data/{root_dir}")
+total_data = len(image_list)
+cache_name = f"encoded_data_{root_dir}_{total_data}"
+
 if "device" not in st.session_state:
     st.session_state["device"] = _check_gpu_memory()
+
+if "total_initial_data" not in st.session_state:
+    st.session_state["total_initial_data"] = total_data
+
+# st.write(st.session_state)
+# st.write(total_data)
 
 
 @st.cache_resource
@@ -80,7 +89,7 @@ def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
             logging.info("Creating cache dir.")
             os.makedirs(name="cache", exist_ok=True)
 
-        cache_file = f"cache/encoded_data_{root_dir}.npy"
+        cache_file = f"cache/{cache_name}.npy"
 
         if Path(cache_file).exists():
             logging.info("Cache files already created.")
@@ -102,10 +111,23 @@ def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
     except Exception as e:
         logging.error(f"[_encode_data] Error while encoding data: {e}")
         return None
+    return _normalize_embeddings(encoded_data)
+
+
+def _auto_update_encoding() -> Tensor | None:
+    total_current_data = int(cache_name.split("_")[-1])
+    diff = total_current_data - st.session_state["total_initial_data"]
+    if diff == 10:
+        st.warning("Significant data change detected. Re-running encoding process.")
+        encoded_data = _encode_data(image_paths=image_list)
+        st.session_state["current_data"] = total_data
+
+    else:
+        encoded_data = _encode_data(image_paths=image_list)
     return encoded_data
 
 
-encoded_data = _encode_data(image_paths=image_list)
+encoded_data = _auto_update_encoding()
 normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
 
@@ -137,11 +159,11 @@ async def main() -> None:
         row_input = st.columns((0.9, 2, 2, 1))
         with row_input[0]:
             num_results = st.number_input(
-                label="Total extracted data",
+                label="Total retrieve data",
                 min_value=1,
                 max_value=100,
                 value=10,
-                help="Total image retrieve data.",
+                help="Input total of image that you want to retrieve, accepted with minimum value is 1 and maximum value as 100.",
                 key="total_retrieve",
             )
 
@@ -167,7 +189,7 @@ async def main() -> None:
             with st.spinner("Searching for similar images..."):
                 similar_images = await _search_data(
                     query_emb=query_emb,
-                    encoded_data=encoded_data,
+                    encoded_data=normalized_encoding,
                     image_paths=image_list,
                     return_data=num_results,
                 )
@@ -180,7 +202,7 @@ async def main() -> None:
                         with cols[idx]:
                             st.image(
                                 image=img_path,
-                                use_column_width="always",
+                                use_container_width=True,
                                 caption=f"Image path: {img_path}",
                             )
                 end_time = datetime.now()

@@ -56,7 +56,7 @@ def _check_gpu_memory(threshold: float = 0.75) -> str | None:
     return device
 
 
-def _update_device():
+def _update_device() -> bool:
     current_device = st.session_state["device"]
     new_device = _check_gpu_memory()
     if new_device != current_device:

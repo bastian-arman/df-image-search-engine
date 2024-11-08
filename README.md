@@ -4,7 +4,6 @@
 This repository demonstrates a Proof of Concept (PoC) for an advanced Image Similarity Search Engine tailored for private datasets. Designed to search and retrieve visually similar images, this project leverages state-of-the-art models to efficiently index and query images.
 
 ## Approach
-
 | ![CLIP](https://raw.githubusercontent.com/mlfoundations/open_clip/main/docs/CLIP.png) |
 |:--:|
 | Image Credit: https://github.com/openai/CLIP |
@@ -36,7 +35,6 @@ pyproject.toml          # Stored of all library based on project requirement.
 ```
 
 # Project Setup Instructions
-
 This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Python v3.12.3. To get started, you'll need to install Docker and Poetry.
 
 ## Prerequisites
@@ -67,10 +65,21 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
     http://localhost:8501/
     ```
 
+# Project Features
+- [x] Search similar images by uploading an image (image based).
+- [x] Search similar images by describing an image (text based).
+
+# Project Future Plan
+- [ ] Change the current framework into more propper framework (e.g: FastAPI, Flask, Django), resulting a service-based Image Search Engine API and integrate into front-end website.
+- [ ] Add queueing method / rate limitter for preventing DDoS attack.
+- [ ] Integrate project with database with classification method for each image and hopefully increasing an accuracy for returning similar image.
+
+
 ## Notes
 - The setup.sh script configures the virtual environment and installs all necessary dependencies.
 - Ensure that you already mounted the NAS directory using mount_nas.sh.
 - The run_server.sh script starts the streamlit server.
+- The run_test.sh script starts the unit testing and generates the report of test.
 according to the business processes.
 
 # Repo Owner? #
