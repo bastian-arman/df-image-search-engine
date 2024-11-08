@@ -1,4 +1,7 @@
+import os
 import sys
+import random
+import string
 import streamlit as st
 from pathlib import Path
 
@@ -45,6 +48,12 @@ def _grab_all_images(root_path: str) -> list | None:
     - List of all image data in extention jpg, jpeg, png.
     """
     try:
+        if not os.path.exists(path=root_path):
+            logging.error(
+                f"[_grab_all_images] Directory {root_path} not available, make sure its available in projects directory."
+            )
+            return None
+
         image_extensions = {".jpg", ".jpeg", ".png"}
         image_paths = [
             str(path)
@@ -79,7 +88,7 @@ def _preprocess_image(image: Image) -> PILImage | None:
         image = ImageOps.fit(image, (224, 224))
         image = ImageOps.grayscale(image)
         image = ImageOps.autocontrast(image)
-        image = ImageOps.flip(image)
+        # image = ImageOps.flip(image)
         image = ImageOps.expand(image)
         image = ImageOps.mirror(image)
     except Exception as e:
@@ -129,7 +138,7 @@ def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
 
 async def _search_data(
     query_emb: Tensor,
-    encoded_data: Tensor,
+    encoded_data: ndarray,
     image_paths: list,
     return_data=10,
 ) -> list | None:
@@ -158,3 +167,13 @@ async def _search_data(
         logging.error(f"[_search_data] Error while searching data: {e}")
         return None
     return similar_images
+
+
+def _random_word(length: int = 4) -> str:
+    if length < 1:
+        raise ValueError("length parameter should be more than 0")
+
+    alphabet = string.ascii_lowercase
+    word = "".join(random.choice(alphabet) for _ in range(length))
+
+    return word
