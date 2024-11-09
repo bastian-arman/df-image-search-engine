@@ -1,6 +1,10 @@
+import sys
 import torch
 import streamlit as st
+from pathlib import Path
 from utils.logger import logging
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
 async def _check_multisearch() -> bool:
@@ -33,34 +37,51 @@ async def _check_multisearch() -> bool:
     return False
 
 
-def _check_gpu_memory(threshold: float = 0.75) -> str | None:
-    """
-    Check CUDA cores memory usage and return
-    cuda or cpu based on defined threshold.
-    """
-    device = "cpu"
-
+async def _check_gpu_avaibility() -> bool | None:
     try:
         if torch.cuda.is_available():
-            logging.info("CUDA cores available.")
-            total_memory = torch.cuda.get_device_properties(0).total_memory
-            allocated_memory = torch.cuda.memory_allocated(0)
-            usage_ratio = allocated_memory / total_memory
-
-            if usage_ratio < threshold:
-                device = "cuda"
-            logging.info(f"Utilized cuda cores: {usage_ratio:.2f}")
-    except Exception as E:
-        logging.error(f"Error while checking gpu memory: {E}")
+            logging.info("[_check_gpu_avaibility] CUDA cores available.")
+            return True
+    except Exception as e:
+        logging.info(
+            f"[_check_gpu_avaibility] Error while checking gpu avaibility: {e}"
+        )
         return None
-    return device
-
-
-def _update_device() -> bool:
-    current_device = st.session_state["device"]
-    new_device = _check_gpu_memory()
-    if new_device != current_device:
-        st.session_state["device"] = new_device
-        logging.info(f"Device updated to: {new_device}")
-        return True
     return False
+
+
+async def _check_gpu_memory(is_cuda_available: bool) -> float | None:
+    """
+    Check CUDA cores memory usage and return the CUDA cores usage.
+    """
+    try:
+        if not is_cuda_available:
+            logging.warning(
+                "[_check_gpu_memory] Warning, CUDA cores not available in this machine, proceeding execution code into CPU device."
+            )
+            return None
+
+        total_memory = torch.cuda.get_device_properties(0).total_memory
+        allocated_memory = torch.cuda.memory_allocated(0)
+        usage_ratio = allocated_memory / total_memory
+
+        logging.info(f"[_check_gpu_memory] Utilized cuda cores: {usage_ratio:.2f}")
+    except Exception as E:
+        logging.error(f"[_check_gpu_memory] Error while checking gpu memory: {E}")
+        return None
+    return usage_ratio
+
+
+def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list | None:
+    try:
+        matching_data = sorted(
+            [
+                item
+                for item in encoded_list
+                if root_dir in item.split("encoded_data_")[1]
+            ]
+        )
+    except Exception as e:
+        logging.error(f"{e}")
+        return None
+    return matching_data

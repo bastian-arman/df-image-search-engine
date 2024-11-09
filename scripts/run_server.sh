@@ -22,5 +22,5 @@ else
 fi
 
 
-echo "Running streamlt server (debug mode)"
+echo "Running streamlt server"
 streamlit run src/main.py --server.port=8501 --server.address=0.0.0.0

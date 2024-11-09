@@ -16,7 +16,7 @@ from sentence_transformers import util
 from torch import Tensor
 
 
-def _setup_sidebar() -> None:
+async def _setup_sidebar() -> None:
     """
     Create sidebar project description.
     """
@@ -37,7 +37,7 @@ def _setup_sidebar() -> None:
     return None
 
 
-def _grab_all_images(root_path: str) -> list | None:
+async def _grab_all_images(root_path: str) -> list | None:
     """
     Recursively extracting all image path based on root path dir.
 
@@ -107,7 +107,7 @@ def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
     try:
         if not isinstance(embeddings, (Tensor, ndarray)):
             logging.error(
-                f"Expected embeddings to be Tensor or ndarray, got {type(embeddings)}"
+                f"[_normalize_embeddings] Expected embeddings to be Tensor or ndarray, got {type(embeddings)}"
             )
             return None
 
@@ -177,3 +177,29 @@ def _random_word(length: int = 4) -> str:
     word = "".join(random.choice(alphabet) for _ in range(length))
 
     return word
+
+
+async def _auto_update_encoding(
+    cache_name: list, total_data_from_nas: int
+) -> bool | None:
+    try:
+        if not cache_name:
+            logging.info("[_auto_update_encoding] Initializing first encode.")
+            return False
+
+        total_current_data = int((cache_name[-1]).split("_")[-1].split(".")[0])
+        diff = total_data_from_nas - total_current_data
+
+        if diff >= 10:
+            logging.info(
+                "[_auto_update_encoding] Perform re-encode process due to triggered by additional data in NAS."
+            )
+            st.warning("Significant data change detected. Re-running encoding process.")
+            return True
+
+    except Exception as e:
+        logging.info(
+            f"[_auto_update_encoding] Error while performing auto update encoding: {e}"
+        )
+        return None
+    return False
