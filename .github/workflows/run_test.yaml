@@ -8,7 +8,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v3
@@ -16,10 +17,20 @@ jobs:
           python-version: '3.12'
 
       - name: Install Poetry
-        run: pip install poetry
+        run: |
+          pip install poetry
+          echo "Poetry installed successfully."
 
       - name: Install Project Dependencies
-        run: sh scripts/setup.sh
+        run: |
+          sh scripts/setup.sh
+          echo "Project dependencies installed successfully."
 
       - name: Run Unit Tests
-        run: sh scripts/run_test.sh
+        run: |
+          sh scripts/run_test.sh
+          echo "Unit tests completed successfully."
+
+      - name: Confirm Successful Completion
+        if: success()
+        run: echo "All steps completed successfully!"
