@@ -11,14 +11,24 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from torch import Tensor
 from utils.logger import logging
 from sentence_transformers import SentenceTransformer
-from utils.validator import _check_multisearch, _check_gpu_memory, _update_device
+from sentence_transformers.SentenceTransformer import SentenceTransformer as model_type
+from utils.validator import (
+    _check_gpu_memory,
+    _check_already_have_encoded_data,
+    _check_multisearch,
+    _check_gpu_avaibility,
+)
 from utils.helper import (
     _grab_all_images,
     _normalize_embeddings,
     _preprocess_image,
     _search_data,
     _setup_sidebar,
+    _auto_update_encoding,
 )
+
+# TODO: make sure all function all idempotent for resulting stable result
+# TODO: Change all function into async function and leverage all thread from local machine
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -36,24 +46,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-root_dir = "PREVIEW_IMAGE"
-start_time = datetime.now()
-image_list = _grab_all_images(root_path=f"mounted-nas-do-not-delete-data/{root_dir}")
-total_data = len(image_list)
-cache_name = f"encoded_data_{root_dir}_{total_data}"
-
-if "device" not in st.session_state:
-    st.session_state["device"] = _check_gpu_memory()
-
-if "total_initial_data" not in st.session_state:
-    st.session_state["total_initial_data"] = total_data
-
-# st.write(st.session_state)
-# st.write(total_data)
-
 
 @st.cache_resource
-def init_model(model: str = "clip-ViT-B-32") -> SentenceTransformer | None:
+def init_model(
+    model: str = "clip-ViT-B-32", device: str = "cpu"
+) -> SentenceTransformer | None:
     """
     Load Visual Transformers model.
     This uses the CLIP model for encoding.
@@ -63,84 +60,132 @@ def init_model(model: str = "clip-ViT-B-32") -> SentenceTransformer | None:
     |   clip-ViT-B-16 	|   68.1                |
     |   clip-ViT-L-14 	|   75.4                |
     """
+
+    start_time = datetime.now()
+
     try:
-        model = SentenceTransformer(
-            model_name_or_path=model, device=st.session_state["device"]
-        )
+        model = SentenceTransformer(model_name_or_path=model, device=device)
         end_time = datetime.now()
-        logging.info(f"Elapsed model initialization process: {end_time-start_time}")
+        logging.info(
+            f"[init_model] Elapsed model initialization process: {end_time-start_time}"
+        )
     except Exception as E:
-        st.error(f"Error loading CLIP model: {E}")
+        st.error(f"[init_model] Error loading CLIP model: {E}")
         return None
     return model
 
 
-if _update_device():
-    model = init_model()
-else:
-    model = init_model()
-
-
-@st.cache_data
-def _encode_data(image_paths: list, batch_size: int = 4) -> Tensor | None:
+@st.cache_resource
+def _encode_data(
+    should_re_encode: bool,
+    _model: model_type,
+    image_paths: list,
+    root_dir: str,
+    cache_name: str,
+    batch_size: int = 4,
+) -> Tensor | None:
     """Encode and normalize data embeddings with preprocessing."""
+
+    start_time = datetime.now()
     try:
         if not os.path.exists(path="cache"):
-            logging.info("Creating cache dir.")
+            logging.info("[_encode_data] Creating cache dir.")
             os.makedirs(name="cache", exist_ok=True)
 
-        cache_file = f"cache/{cache_name}.npy"
+        list_encoded_data = os.listdir(path="cache")
+        similar_encoded_data = _check_already_have_encoded_data(
+            root_dir=root_dir, encoded_list=list_encoded_data
+        )
 
-        if Path(cache_file).exists():
-            logging.info("Cache files already created.")
-            encoded_data = np.load(cache_file)
-        else:
-            logging.info("Creating cache encoding files.")
+        if not should_re_encode and similar_encoded_data:
+            logging.info(
+                f"[_encode_data] Using cached {similar_encoded_data[-1]} encoding files."
+            )
+            encoded_data = np.load(f"cache/{similar_encoded_data[-1]}")
+
+        if should_re_encode or not similar_encoded_data:
+            logging.info(
+                "[_encode_data] Re-create cache encoding files due to significant data changes in NAS or changed NAS mount directory."
+            )
             processed_images = [
                 _preprocess_image(Image.open(path)) for path in image_paths
             ]
-            encoded_data = model.encode(
+            encoded_data = _model.encode(
                 processed_images,
                 batch_size=batch_size,
                 convert_to_tensor=True,
                 show_progress_bar=True,
             )
+            cache_file = f"cache/{cache_name}.npy"
             np.save(cache_file, encoded_data.cpu().numpy())
+            logging.info(f"[_encode_data] Created new encoding file {cache_file}.")
+
         end_time = datetime.now()
-        logging.info(f"Elapsed encoding data process: {end_time-start_time}")
+        logging.info(
+            f"[_encode_data] Elapsed encoding data process: {end_time-start_time}"
+        )
     except Exception as e:
         logging.error(f"[_encode_data] Error while encoding data: {e}")
         return None
     return _normalize_embeddings(encoded_data)
 
 
-def _auto_update_encoding() -> Tensor | None:
-    total_current_data = int(cache_name.split("_")[-1])
-    diff = total_current_data - st.session_state["total_initial_data"]
-    if diff == 10:
-        st.warning("Significant data change detected. Re-running encoding process.")
-        encoded_data = _encode_data(image_paths=image_list)
-        st.session_state["current_data"] = total_data
-
-    else:
-        encoded_data = _encode_data(image_paths=image_list)
-    return encoded_data
-
-
-encoded_data = _auto_update_encoding()
-normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
-
-
 async def main() -> None:
     """
     Main function for streamlit run in asynchronous mode.
     """
+
+    start_time = datetime.now()
+
+    is_using_cuda = await _check_gpu_avaibility()
+    resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
+
+    if is_using_cuda and resource_usage < 0.75:
+        model = init_model(device="cuda")
+    else:
+        model = init_model()
+
+    root_dir = "PREVIEW_IMAGE"
+    image_list = await _grab_all_images(
+        root_path=f"mounted-nas-do-not-delete-data/{root_dir}"
+    )
+    total_data = len(image_list)
+    logging.info(f"[main] Total image data in NAS: {total_data}")
+    list_encoded_data = os.listdir(path="cache")
+    similar_encoded_data = _check_already_have_encoded_data(
+        root_dir=root_dir, encoded_list=list_encoded_data
+    )
+    cache_name = f"encoded_data_{root_dir}_{total_data}"
+    should_re_encode = await _auto_update_encoding(
+        cache_name=similar_encoded_data, total_data_from_nas=total_data
+    )
+
+    if should_re_encode:
+        encoded_data = _encode_data(
+            should_re_encode=should_re_encode,
+            _model=model,
+            image_paths=image_list,
+            cache_name=cache_name,
+            root_dir=root_dir,
+        )
+    else:
+        encoded_data = _encode_data(
+            should_re_encode=should_re_encode,
+            _model=model,
+            image_paths=image_list,
+            cache_name=cache_name,
+            root_dir=root_dir,
+        )
+
+    normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
+
     try:
-        _setup_sidebar()
+        await _setup_sidebar()
+
         col1, col2 = st.columns(2)
 
         with col1:
-            st.write("Search data by image")
+            st.write("#### Search data by image")
             image_file = st.file_uploader(
                 label="Choose image file",
                 help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
@@ -149,7 +194,7 @@ async def main() -> None:
             )
 
         with col2:
-            st.write("Search data by text")
+            st.write("#### Search data by text")
             text_query = st.text_area(
                 label="Input image description",
                 help="Describe the detail of image you want to search.",
@@ -180,6 +225,7 @@ async def main() -> None:
         )
 
         if search_button:
+            logging.info("[main] Perform image search.")
             if image_file:
                 query_image = _preprocess_image(Image.open(image_file))
                 query_emb = model.encode([query_image], convert_to_tensor=True)
@@ -205,10 +251,11 @@ async def main() -> None:
                                 use_container_width=True,
                                 caption=f"Image path: {img_path}",
                             )
-                end_time = datetime.now()
-                logging.info(f"Elapsed time for search data: {end_time-start_time}")
             else:
                 st.error("No similar images found.")
+
+            end_time = datetime.now()
+            logging.info(f"[main] Elapsed time for search data: {end_time-start_time}")
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None
