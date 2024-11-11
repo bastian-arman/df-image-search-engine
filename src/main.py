@@ -29,6 +29,7 @@ from utils.helper import (
 
 # TODO: make sure all function all idempotent for resulting stable result
 # TODO: Change all function into async function and leverage all thread from local machine
+# TODO: add integration from local streamlit server into RabbitMQ server for queueing method.
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -139,15 +140,13 @@ async def main() -> None:
 
     is_using_cuda = await _check_gpu_avaibility()
     resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
-
-    if is_using_cuda and resource_usage < 0.75:
-        model = init_model(device="cuda")
-    else:
-        model = init_model()
+    model = init_model(
+        device="cuda" if is_using_cuda and resource_usage < 0.75 else "cpu"
+    )
 
     root_dir = "PREVIEW_IMAGE"
     image_list = await _grab_all_images(
-        root_path=f"mounted-nas-do-not-delete-data/{root_dir}"
+        root_dir=f"mounted-nas-do-not-delete-data/{root_dir}"
     )
     total_data = len(image_list)
     logging.info(f"[main] Total image data in NAS: {total_data}")
@@ -160,23 +159,11 @@ async def main() -> None:
         cache_name=similar_encoded_data, total_data_from_nas=total_data
     )
 
-    if should_re_encode:
-        encoded_data = _encode_data(
-            should_re_encode=should_re_encode,
-            _model=model,
-            image_paths=image_list,
-            cache_name=cache_name,
-            root_dir=root_dir,
-        )
-    else:
-        encoded_data = _encode_data(
-            should_re_encode=should_re_encode,
-            _model=model,
-            image_paths=image_list,
-            cache_name=cache_name,
-            root_dir=root_dir,
-        )
-
+    encoded_data = (
+        _encode_data(should_re_encode, model, image_list, root_dir, cache_name)
+        if should_re_encode
+        else _encode_data(False, model, image_list, root_dir, cache_name)
+    )
     normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
     try:
@@ -191,6 +178,7 @@ async def main() -> None:
                 help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
                 key="image_uploader",
                 type=["jpeg", "jpg", "png"],
+                # disabled=True
             )
 
         with col2:
@@ -226,6 +214,13 @@ async def main() -> None:
 
         if search_button:
             logging.info("[main] Perform image search.")
+            search_query = {
+                "method": "image" if image_file else "text",
+                "query": image_file if image_file else text_query,
+                "num_results": num_results,
+            }
+
+            print(search_query)
             if image_file:
                 query_image = _preprocess_image(Image.open(image_file))
                 query_emb = model.encode([query_image], convert_to_tensor=True)

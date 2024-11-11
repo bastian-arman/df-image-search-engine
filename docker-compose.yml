@@ -1,27 +1,20 @@
 services:
-  mongodb-container:
-    image: mongo
+  rabbitmq-container:
+    image: rabbitmq:management-alpine
     restart: always
     ports:
-      - 27017:27017
+      - 5672:5672
+      - 15672:15672
     volumes:
-      - ../mock-database-image-similarity/mongodb_data:/data/db
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGOODB_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_log:/var/log/rabbitmq
+    networks:
+      - rabbitmq_streamlit_net
 
-  mongoexpress-container:
-    image: mongo-express
-    restart: always
-    ports:
-      - 8081:8081
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGOEXPRESS_ADMINUSERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGOEXPRESS_ADMINPASSWORD}
-      - ME_CONFIG_MONGODB_URL=mongodb://${MONGOODB_USERNAME}:${MONGODB_PASSWORD}@mongodb-container:27017/
-      - ME_CONFIG_BASICAUTH=true
-      - ME_CONFIG_BASICAUTH_USERNAME=${MONGOEXPRESS_ADMINUSERNAME}
-      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGOEXPRESS_ADMINPASSWORD}
+networks:
+  rabbitmq_streamlit_net:
+    driver: bridge
 
 volumes:
-  mongodb-container:
+  rabbitmq_data:
+  rabbitmq_log:

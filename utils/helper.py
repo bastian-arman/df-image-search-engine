@@ -6,14 +6,19 @@ import streamlit as st
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from utils.logger import logging
-from PIL.Image import Image as PILImage
-from PIL import ImageOps, Image
-from numpy import ndarray
-from numpy.linalg import norm
 from numpy import isnan
-from sentence_transformers import util
 from torch import Tensor
+from numpy import ndarray
+from typing import Literal
+from numpy.linalg import norm
+from PIL import ImageOps, Image
+from utils.logger import logging
+from utils.schema import TextData
+from src.secret import RABBITMQ_HOST
+from sentence_transformers import util
+from PIL.Image import Image as PILImage
+from pika import BlockingConnection, ConnectionParameters, BasicProperties
+from sentence_transformers.SentenceTransformer import SentenceTransformer as model_type
 
 
 async def _setup_sidebar() -> None:
@@ -37,7 +42,7 @@ async def _setup_sidebar() -> None:
     return None
 
 
-async def _grab_all_images(root_path: str) -> list | None:
+async def _grab_all_images(root_dir: str) -> list | None:
     """
     Recursively extracting all image path based on root path dir.
 
@@ -48,21 +53,21 @@ async def _grab_all_images(root_path: str) -> list | None:
     - List of all image data in extention jpg, jpeg, png.
     """
     try:
-        if not os.path.exists(path=root_path):
+        if not os.path.exists(path=root_dir):
             logging.error(
-                f"[_grab_all_images] Directory {root_path} not available, make sure its available in projects directory."
+                f"[_grab_all_images] Directory {root_dir} not available, make sure its available in projects directory."
             )
             return None
 
         image_extensions = {".jpg", ".jpeg", ".png"}
         image_paths = [
             str(path)
-            for path in Path(root_path).rglob("*")
+            for path in Path(root_dir).rglob("*")
             if path.suffix.lower() in image_extensions
         ]
 
         if not image_paths:
-            logging.error(f"[_grab_all_images] No image files found in {root_path}")
+            logging.error(f"[_grab_all_images] No image files found in {root_dir}")
             return None
 
     except Exception as e:
@@ -203,3 +208,106 @@ async def _auto_update_encoding(
         )
         return None
     return False
+
+
+def _produce_image_queue(data: dict, queue_name: Literal["image_data"]) -> None:
+    try:
+        connection = BlockingConnection(ConnectionParameters(host=RABBITMQ_HOST))
+        logging.info("[_produce_image_queue] Opened RabbitMQ connection.")
+
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name, durable=True)
+
+        channel.basic_publish(
+            exchange="",
+            routing_key=queue_name,
+            body=data,
+            properties=BasicProperties(delivery_mode=1),
+        )
+        logging.info(
+            f"[_produce_text_queue] Text data prompt sent into {queue_name} queue."
+        )
+
+    except Exception as e:
+        logging.error(f"[_produce_image_queue] Error while sending queue: {e}")
+    finally:
+        connection.close()
+        logging.info("[_produce_image_queue] Closed RabbitMQ connection.")
+    return None
+
+
+def _produce_text_queue(data: dict, queue_name: Literal["text_data"]) -> None:
+    try:
+        connection = BlockingConnection(ConnectionParameters(host=RABBITMQ_HOST))
+        logging.info("[_produce_text_queue] Opened RabbitMQ connection.")
+
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name, durable=True)
+
+        channel.basic_publish(
+            exchange="",
+            routing_key=queue_name,
+            body=data,
+            properties=BasicProperties(delivery_mode=1),
+        )
+        logging.info(
+            f"[_produce_text_queue] Text data prompt sent into {queue_name} queue."
+        )
+    except Exception as e:
+        logging.error(f"[_produce_text_queue] Error while sending queue: {e}")
+    finally:
+        connection.close()
+        logging.info("[_produce_text_queue] Closed RabbitMQ connection.")
+    return None
+
+
+def _on_message_receives(model: model_type, channel, method, properties, body) -> None:
+    try:
+        logging.info(f"[Consumer] Received search query: {body}")
+
+    except Exception as e:
+        logging.error(f"[_on_message_receives] Error callback function: {e}")
+    return None
+
+
+def _consume_queue(queue_name: Literal["text_data", "image_data"]) -> None:
+    try:
+        connection = BlockingConnection(ConnectionParameters(host=RABBITMQ_HOST))
+        logging.info("[_consume_queue] Opened RabbitMQ connection.")
+
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name, durable=True)
+        logging.info(f"[_consume_queue] Declaring queue into {queue_name} queue.")
+
+        channel.basic_consume(
+            queue=queue_name,
+            auto_ack=True,
+        )
+    except Exception as e:
+        logging.error(f"[_consume_queue] Error while sending queue: {e}")
+    finally:
+        connection.close()
+        logging.info("[_consume_queue] Closed RabbitMQ connection.")
+    return None
+
+
+async def _wrapper_text_data(text_prompt: str, total_data: int) -> dict | None:
+    try:
+        data = TextData(text_prompt=text_prompt, total_data=total_data).dict()
+        logging.info("[_wrapper_text_data] Created data TextData wrapper.")
+    except Exception as e:
+        logging.error(
+            f"[_wrapper_text_data] Error while wrapping {data} into dictionary: {e}"
+        )
+        return None
+    return data
+
+
+# async def _wrapper_image_data(image_data: PILImage, total_data: int) -> dict|None:
+#     try:
+#         data = ImageData(image_data=image_data, total_data=total_data).dict()
+#         logging.info("[_wrapper_image_data] Created data ImageData wrapper.")
+#     except Exception as e:
+#         logging.error(f"[_wrapper_image_data] Error while wrapping {data} into dictionary: {e}")
+#         return None
+#     return data
