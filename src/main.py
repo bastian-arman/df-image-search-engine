@@ -147,8 +147,10 @@ async def main() -> None:
     image_list = await _grab_all_images(
         root_dir=f"mounted-nas-do-not-delete-data/{root_dir}"
     )
+
     total_data = len(image_list)
     logging.info(f"[main] Total image data in NAS: {total_data}")
+
     list_encoded_data = os.listdir(path="cache")
     similar_encoded_data = _check_already_have_encoded_data(
         root_dir=root_dir, encoded_list=list_encoded_data
