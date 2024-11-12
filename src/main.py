@@ -25,11 +25,10 @@ from utils.helper import (
     _search_data,
     _setup_sidebar,
     _auto_update_encoding,
+    _wrapper_queue_data,
+    _produce_image_queue,
+    _produce_text_queue,
 )
-
-# TODO: make sure all function all idempotent for resulting stable result
-# TODO: Change all function into async function and leverage all thread from local machine
-# TODO: add integration from local streamlit server into RabbitMQ server for queueing method.
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -173,12 +172,11 @@ async def main() -> None:
 
         with col1:
             st.write("#### Search data by image")
-            image_file = st.file_uploader(
+            image_upload = st.file_uploader(
                 label="Choose image file",
                 help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
                 key="image_uploader",
                 type=["jpeg", "jpg", "png"],
-                # disabled=True
             )
 
         with col2:
@@ -202,8 +200,8 @@ async def main() -> None:
 
         disable_search = await _check_multisearch()
 
-        if image_file and not disable_search:
-            st.image(image=image_file, width=500)
+        if image_upload and not disable_search:
+            st.image(image=image_upload, width=500)
 
         search_button = st.button(
             label="Search",
@@ -214,43 +212,51 @@ async def main() -> None:
 
         if search_button:
             logging.info("[main] Perform image search.")
-            search_query = {
-                "method": "image" if image_file else "text",
-                "query": image_file if image_file else text_query,
-                "num_results": num_results,
-            }
+            method = "text_query" if text_query else "image_upload"
+            query_embedding = (
+                model.encode([text_query], convert_to_tensor=True)
+                if text_query
+                else model.encode(
+                    [_preprocess_image(Image.open(image_upload))],
+                    convert_to_tensor=True,
+                )
+            )
+            converted_embedding = np.array(query_embedding.cpu()).flatten().tolist()
+            queue_data = await _wrapper_queue_data(
+                query_embedding=converted_embedding, total_retrieved_data=num_results
+            )
+            (
+                _produce_text_queue(data=queue_data, queue_name=method)
+                if text_query
+                else _produce_image_queue(data=queue_data, queue_name=method)
+            )
 
-            print(search_query)
-            if image_file:
-                query_image = _preprocess_image(Image.open(image_file))
-                query_emb = model.encode([query_image], convert_to_tensor=True)
-            else:
-                query_emb = model.encode([text_query], convert_to_tensor=True)
+            similar_images = await _search_data(
+                query_emb=query_embedding,
+                encoded_data=normalized_encoding,
+                image_paths=image_list,
+                return_data=num_results,
+            )
 
             with st.spinner("Searching for similar images..."):
-                similar_images = await _search_data(
-                    query_emb=query_emb,
-                    encoded_data=normalized_encoding,
-                    image_paths=image_list,
-                    return_data=num_results,
-                )
+                if similar_images:
+                    st.write("### Similar Images Found")
+                    for i in range(0, len(similar_images), 4):
+                        cols = st.columns(4)
+                        for idx, (img_path, score) in enumerate(
+                            similar_images[i : i + 4]
+                        ):
+                            with cols[idx]:
+                                st.image(
+                                    image=img_path,
+                                    use_container_width=True,
+                                    caption=f"Image path: {img_path}",
+                                )
+                else:
+                    st.error("No similar images found.")
 
-            if similar_images:
-                st.write("### Similar Images Found")
-                for i in range(0, len(similar_images), 4):
-                    cols = st.columns(4)
-                    for idx, (img_path, score) in enumerate(similar_images[i : i + 4]):
-                        with cols[idx]:
-                            st.image(
-                                image=img_path,
-                                use_container_width=True,
-                                caption=f"Image path: {img_path}",
-                            )
-            else:
-                st.error("No similar images found.")
-
-            end_time = datetime.now()
-            logging.info(f"[main] Elapsed time for search data: {end_time-start_time}")
+        end_time = datetime.now()
+        logging.info(f"[main] Elapsed time for search data: {end_time-start_time}")
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None

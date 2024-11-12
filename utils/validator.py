@@ -20,7 +20,7 @@ async def _check_multisearch() -> bool:
     ):
         logging.warning("No data inputted.")
         st.warning(
-            "Warning: Please upload data or fill image description for performing image search."
+            "Warning: Please upload data or fill image description to perform image search."
         )
         return True
     elif st.session_state["image_description"].strip() == "" and st.session_state.get(
