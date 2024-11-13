@@ -22,7 +22,7 @@ else
 fi
 
 echo "Running tests"
-coverage run -m --source=tests/ pytest tests/ -v
+coverage run -m --source=tests/ pytest tests/
 
 echo "Generating coverage report"
 coverage report -m --skip-empty

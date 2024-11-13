@@ -49,3 +49,15 @@ async def test_auto_update_encoding_with_exception() -> None:
             cache_name=["invalid_cache_name"], total_data_from_nas=current_num
         )
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_invalid_trigger_nas_data_lte_encoded_data() -> None:
+    """Should return False due to current encoded data has more data than given data from NAS."""
+    with patch("os.listdir", return_value=encoded_list):
+        initial_num = int(encoded_list[0].split(".")[0].split("_")[-1])
+        current_num = randint(initial_num - 100, initial_num - 50)
+        result = await _auto_update_encoding(
+            cache_name=encoded_list, total_data_from_nas=current_num
+        )
+        assert result is False

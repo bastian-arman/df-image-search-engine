@@ -152,7 +152,7 @@ async def main() -> None:
     similar_encoded_data = _check_already_have_encoded_data(
         root_dir=root_dir, encoded_list=list_encoded_data
     )
-    print(similar_encoded_data)
+
     cache_name = f"encoded_data_{root_dir}_{total_data}"
     should_re_encode = await _auto_update_encoding(
         cache_name=similar_encoded_data, total_data_from_nas=total_data

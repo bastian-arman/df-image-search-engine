@@ -102,7 +102,22 @@ def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list 
                 if root_dir in item.split("encoded_data_")[1]
             ]
         )
+
+        if not matching_data:
+            logging.error(
+                "[_check_already_have_encoded_data] No similar encoder find. Should initialize encode data."
+            )
+            return None
+
+        if not encoded_list:
+            logging.error(
+                "[_check_already_have_encoded_data] No list of encoded data found! Please check the /cache directory.."
+            )
+            return None
+
     except Exception as e:
-        logging.error(f"{e}")
+        logging.error(
+            f"[_check_already_have_encoded_data] Error while checking if any already saved encoder data: {e}"
+        )
         return None
     return matching_data

@@ -207,6 +207,12 @@ async def _auto_update_encoding(
         total_current_data = int((cache_name[-1]).split("_")[-1].split(".")[0])
         diff = total_data_from_nas - total_current_data
 
+        if total_data_from_nas <= total_current_data:
+            logging.info(
+                f"[_auto_update_encoding] Skipping re-encode. Current encoded data is {total_current_data} while incoming data is {total_data_from_nas}"
+            )
+            return False
+
         if diff >= 10:
             logging.info(
                 "[_auto_update_encoding] Perform re-encode process due to triggered by additional data in NAS."
