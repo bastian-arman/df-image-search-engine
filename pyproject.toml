@@ -26,8 +26,6 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "-ra -q"
 testpaths = ["tests"]
-asyncio_mode="auto"
 asyncio_default_fixture_loop_scope = "function"
+cache_dir = ".pytest_cache"

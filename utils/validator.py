@@ -7,32 +7,45 @@ from utils.logger import logging
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
-async def _check_multisearch() -> bool:
+async def _check_multisearch(
+    image_description: str = None, image_uploader: str = None
+) -> bool:
     """Checks if both search methods are used, returning True if so to disable the search button."""
-    if st.session_state.get("image_description") and st.session_state.get(
-        "image_uploader"
-    ):
-        logging.error("Error multi-method.")
-        st.error("Error multi-method: Only one search method should be selected.")
-        return True
-    elif not st.session_state.get("image_description") and not st.session_state.get(
-        "image_uploader"
-    ):
-        logging.warning("No data inputted.")
-        st.warning(
-            "Warning: Please upload data or fill image description to perform image search."
+    description = (
+        image_description
+        if image_description is not None
+        else st.session_state.get("image_description")
+    )
+    uploader = (
+        image_uploader
+        if image_uploader is not None
+        else st.session_state.get("image_uploader")
+    )
+
+    try:
+        if description and uploader:
+            logging.error("Error multi-method.")
+            st.error("Error multi-method: Only one search method should be selected.")
+            return True
+        if not description and not uploader:
+            logging.warning("No data inputted.")
+            st.warning(
+                "Warning: Please upload data or fill image description to perform image search."
+            )
+            return True
+        if description and description.strip() == "" and uploader:
+            logging.info("Using upload image method.")
+            st.success("Success input data.")
+            return False
+        if description and description.strip() == "":
+            logging.error("Only whitespace detected in image description.")
+            st.error("Error: Image description cannot contain only spaces.")
+            return True
+    except Exception as e:
+        logging.error(
+            f"[_check_multisearch] Error exception while check multisearch: {e}"
         )
-        return True
-    elif st.session_state["image_description"].strip() == "" and st.session_state.get(
-        "image_uploader"
-    ):
-        logging.info("Using upload image method.")
-        st.success("Success input data.")
-        return False
-    elif st.session_state["image_description"].strip() == "":
-        logging.error("Only whitespace detected in image description.")
-        st.error("Error: Image description cannot contain only spaces.")
-        return True
+        return None
     st.success("Success input data.")
     return False
 
@@ -52,9 +65,17 @@ async def _check_gpu_avaibility() -> bool | None:
 
 async def _check_gpu_memory(is_cuda_available: bool) -> float | None:
     """
-    Check CUDA cores memory usage and return the CUDA cores usage.
+    Parameters:
+    - is_cuda_available: CUDA cores is available.
+
+    Returns:
+    - Float of CUDA cores memory usage in percentage.
     """
     try:
+        if not isinstance(is_cuda_available, bool):
+            logging.error("[_check_gpu_memory] Invalid type for is_cuda_available.")
+            return None
+
         if not is_cuda_available:
             logging.warning(
                 "[_check_gpu_memory] Warning, CUDA cores not available in this machine, proceeding execution code into CPU device."
@@ -67,7 +88,7 @@ async def _check_gpu_memory(is_cuda_available: bool) -> float | None:
 
         logging.info(f"[_check_gpu_memory] Utilized cuda cores: {usage_ratio:.2f}")
     except Exception as E:
-        logging.error(f"[_check_gpu_memory] Error while checking gpu memory: {E}")
+        logging.error(f"[_check_gpu_memory] Error while checking GPU memory: {E}")
         return None
     return usage_ratio
 

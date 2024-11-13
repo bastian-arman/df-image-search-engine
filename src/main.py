@@ -22,12 +22,9 @@ from utils.helper import (
     _grab_all_images,
     _normalize_embeddings,
     _preprocess_image,
-    _search_data,
     _setup_sidebar,
     _auto_update_encoding,
-    _wrapper_queue_data,
-    _produce_image_queue,
-    _produce_text_queue,
+    _search_data,
 )
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
@@ -155,6 +152,7 @@ async def main() -> None:
     similar_encoded_data = _check_already_have_encoded_data(
         root_dir=root_dir, encoded_list=list_encoded_data
     )
+    print(similar_encoded_data)
     cache_name = f"encoded_data_{root_dir}_{total_data}"
     should_re_encode = await _auto_update_encoding(
         cache_name=similar_encoded_data, total_data_from_nas=total_data
@@ -200,7 +198,10 @@ async def main() -> None:
                 key="total_retrieve",
             )
 
-        disable_search = await _check_multisearch()
+        disable_search = await _check_multisearch(
+            image_description=st.session_state["image_description"],
+            image_uploader=st.session_state["image_uploader"],
+        )
 
         if image_upload and not disable_search:
             st.image(image=image_upload, width=500)
@@ -214,7 +215,8 @@ async def main() -> None:
 
         if search_button:
             logging.info("[main] Perform image search.")
-            method = "text_query" if text_query else "image_upload"
+            # method = "text_query" if text_query else "image_upload"
+
             query_embedding = (
                 model.encode([text_query], convert_to_tensor=True)
                 if text_query
@@ -223,15 +225,14 @@ async def main() -> None:
                     convert_to_tensor=True,
                 )
             )
-            converted_embedding = np.array(query_embedding.cpu()).flatten().tolist()
-            queue_data = await _wrapper_queue_data(
-                query_embedding=converted_embedding, total_retrieved_data=num_results
-            )
-            (
-                _produce_text_queue(data=queue_data, queue_name=method)
-                if text_query
-                else _produce_image_queue(data=queue_data, queue_name=method)
-            )
+
+            # converted_embedding = query_embedding.cpu().detach().numpy().flatten().tolist()
+            # queue_data = await _wrapper_queue_data(
+            #     query_embedding=converted_embedding, total_retrieved_data=num_results
+            # )
+
+            # await _produce_queue(data=queue_data, queue_name=method)
+            # similar_images = await _consume_queue(queue_name=method, image_list=image_list, encoding=normalized_encoding)
 
             similar_images = await _search_data(
                 query_emb=query_embedding,
@@ -257,8 +258,10 @@ async def main() -> None:
                 else:
                     st.error("No similar images found.")
 
-        end_time = datetime.now()
-        logging.info(f"[main] Elapsed time for search data: {end_time-start_time}")
+                end_time = datetime.now()
+                logging.info(
+                    f"[main] Elapsed time for search data: {end_time-start_time}"
+                )
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None

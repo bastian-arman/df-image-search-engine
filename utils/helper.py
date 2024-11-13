@@ -1,5 +1,6 @@
 import os
 import sys
+import pika
 import json
 import random
 import string
@@ -9,7 +10,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from numpy import isnan
-from torch import Tensor
+from torch import Tensor, tensor
 from typing import Literal
 from numpy.linalg import norm
 from PIL import ImageOps, Image
@@ -18,6 +19,7 @@ from utils.schema import QueueData
 from src.secret import RABBITMQ_HOST
 from sentence_transformers import util
 from PIL.Image import Image as PILImage
+from pika.exceptions import AMQPConnectionError
 from pika import BlockingConnection, ConnectionParameters, BasicProperties
 
 
@@ -39,6 +41,7 @@ async def _setup_sidebar() -> None:
             st.divider()
     except Exception as e:
         logging.error(f"[_setup_sidebar] Error while setup sidebar: {e}")
+    return None
 
 
 async def _grab_all_images(root_dir: str) -> list | None:
@@ -186,6 +189,16 @@ def _random_word(length: int = 4) -> str:
 async def _auto_update_encoding(
     cache_name: list, total_data_from_nas: int
 ) -> bool | None:
+    """
+    Trigger auto re-encode when there is more of 10 images data update in NAS.
+
+    Parameters:
+    - cache_name: List of already saved cache in /cache directory.
+    - total_data_from_nas: Total image data from NAS.
+
+    Returns:
+    - Boolean for auto triggering update encoding process.
+    """
     try:
         if not cache_name:
             logging.info("[_auto_update_encoding] Initializing first encode.")
@@ -225,10 +238,12 @@ async def _wrapper_queue_data(
     return data
 
 
-def _produce_image_queue(data: dict, queue_name: Literal["image_upload"]):
+async def _produce_queue(
+    data: dict, queue_name: Literal["text_query", "image_upload"]
+) -> None:
     try:
         connection = BlockingConnection(ConnectionParameters(host=RABBITMQ_HOST))
-        logging.info("[_produce_image_queue] Opened RabbitMQ connection.")
+        logging.info("[_produce_queue] Opened RabbitMQ connection.")
 
         channel = connection.channel()
         channel.queue_declare(queue=queue_name, durable=True)
@@ -239,40 +254,83 @@ def _produce_image_queue(data: dict, queue_name: Literal["image_upload"]):
             exchange="",
             routing_key=queue_name,
             body=message_body,
-            properties=BasicProperties(delivery_mode=1),
+            properties=BasicProperties(delivery_mode=pika.DeliveryMode.Persistent),
         )
-        logging.info(
-            f"[_produce_text_queue] Text data prompt sent into {queue_name} queue."
+        logging.info(f"[_produce_queue] Text data prompt sent into {queue_name} queue.")
+    except AMQPConnectionError as e:
+        logging.error(f"[_produce_queue] Connection to RabbitMQ failed: {e}")
+        raise ConnectionError(
+            "RabbitMQ container may not be running. Please ensure it is started."
         )
-
     except Exception as e:
-        logging.error(f"[_produce_image_queue] Error while sending queue: {e}")
+        logging.error(f"[_produce_queue] Error while sending queue: {e}")
     finally:
         connection.close()
-        logging.info("[_produce_image_queue] Closed RabbitMQ connection.")
+        logging.info("[_produce_queue] Closed RabbitMQ connection.")
+    return None
 
 
-def _produce_text_queue(data: dict, queue_name: Literal["text_query"]):
+async def _consume_queue(
+    queue_name: Literal["text_query", "image_upload"],
+    image_list: list,
+    encoding: ndarray,
+) -> list | None:
+    result_image_paths = None
+
+    async def callback(ch, method, properties, body):
+        nonlocal result_image_paths
+        try:
+            message = json.loads(body)
+            query_embedding = tensor(message["query_embedding"]).unsqueeze(0)
+            total_retrieved_data = message["total_retrieved_data"]
+
+            similar_images = await _search_data(
+                query_emb=query_embedding,
+                encoded_data=encoding,
+                image_paths=image_list,
+                return_data=total_retrieved_data,
+            )
+
+            if similar_images:
+                result_image_paths = similar_images
+                logging.info(f"Found {len(result_image_paths)} similar images.")
+            else:
+                logging.warning("No similar images found.")
+                result_image_paths = None
+
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            channel.stop_consuming()  # Stop after processing one message
+
+        except Exception as e:
+            logging.error(f"Error processing message: {e}")
+            ch.basic_ack(
+                delivery_tag=method.delivery_tag
+            )  # Acknowledge to remove from queue even on error
+
     try:
         connection = BlockingConnection(ConnectionParameters(host=RABBITMQ_HOST))
-        logging.info("[_produce_text_queue] Opened RabbitMQ connection.")
+        logging.info("[_consume_queue] Opened RabbitMQ connection.")
 
         channel = connection.channel()
         channel.queue_declare(queue=queue_name, durable=True)
 
-        message_body = json.dumps(data)
+        channel.basic_qos(prefetch_count=1)
+        channel.basic_consume(queue=queue_name, on_message_callback=await callback)
+        logging.info(f"[_consume_queue] Waiting for messages in {queue_name}")
 
-        channel.basic_publish(
-            exchange="",
-            routing_key=queue_name,
-            body=message_body,
-            properties=BasicProperties(delivery_mode=1),
-        )
-        logging.info(
-            f"[_produce_text_queue] Text data prompt sent into {queue_name} queue."
+        channel.start_consuming()
+
+    except AMQPConnectionError as e:
+        logging.error(f"[_consume_queue] RabbitMQ connection failed: {e}")
+        raise ConnectionError(
+            "RabbitMQ container may not be running. Please ensure it is started."
         )
     except Exception as e:
-        logging.error(f"[_produce_text_queue] Error while sending queue: {e}")
+        logging.error(
+            f"[_consume_queue] Error while consuming from queue {queue_name}: {e}"
+        )
     finally:
         connection.close()
-        logging.info("[_produce_text_queue] Closed RabbitMQ connection.")
+        logging.info("[_consume_queue] Closed RabbitMQ connection.")
+
+    return result_image_paths

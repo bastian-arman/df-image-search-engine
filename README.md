@@ -45,17 +45,22 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
 
 ## Setup steps
 
-1. **Run the setup script**
+1. **Run setup script**
     ```
     sh scripts/setup.sh
     ```
 
-2. **Mount NAS Directory**
+2. **Mount NAS directory**
     ```
     sh scripts/mount_nas.sh
     ```
 
-3. **Start the server script**
+2. **Start the RabbitMQ container**
+    ```
+    docker-compose up -d
+    ```
+
+3. **Start the streamlit server**
     ```
     sh scripts/run_server.sh
     ```

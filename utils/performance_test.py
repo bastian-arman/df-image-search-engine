@@ -1,7 +1,5 @@
 from locust import HttpUser, task, between
 
-# TODO: find a way to perform performance testing for planning deployment spesification.
-
 
 class MyUser(HttpUser):
     """
@@ -13,3 +11,6 @@ class MyUser(HttpUser):
     @task
     def my_task(self):
         self.client.get("http://localhost:8501/")
+
+
+# TODO: find a way to perform performance testing for planning deployment spesification.

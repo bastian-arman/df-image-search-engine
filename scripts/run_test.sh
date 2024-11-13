@@ -22,5 +22,10 @@ else
 fi
 
 echo "Running tests"
-coverage run -m pytest -v && coverage report -m
+coverage run -m --source=tests/ pytest tests/ -v
+
+echo "Generating coverage report"
+coverage report -m --skip-empty
+coverage html
+
 echo "Test finished"
