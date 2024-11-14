@@ -104,12 +104,18 @@ def _preprocess_image(image: Image) -> PILImage | None:
     return image
 
 
+print(_preprocess_image(Image.open(("images/Architecture Flow.png"))))
+
+
 def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
     """
-    Normalize embedding tensor from range 1 into -1
+    Normalize embedding tensor from range 1 into 0
 
     Parameters:
-    - embeddings: Tensor or
+    - embeddings: Tensor or ndarray to be normalized
+
+    Returns:
+    - Normalized embeddings as ndarray, or None if an error occurs.
     """
     try:
         if not isinstance(embeddings, (Tensor, ndarray)):
@@ -121,25 +127,24 @@ def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
         if isinstance(embeddings, Tensor) and embeddings.device.type == "cuda":
             embeddings = embeddings.cpu()
 
-        embedding_norms = norm(
-            x=embeddings.detach().numpy()
+        embedding_data = (
+            embeddings.detach().numpy()
             if isinstance(embeddings, Tensor)
-            else embeddings,
-            axis=1,
-            keepdims=True,
+            else embeddings
         )
 
-        normalized_embeddings = (
-            embeddings.detach().numpy() / embedding_norms
-            if isinstance(embeddings, Tensor)
-            else embeddings / embedding_norms
-        )
+        epsilon = 1e-8
+        embedding_norms = norm(embedding_data, axis=1, keepdims=True) + epsilon
+        normalized_embeddings = embedding_data / embedding_norms
+
         normalized_embeddings[isnan(normalized_embeddings)] = 0
+
     except Exception as e:
         logging.error(
             f"[_normalize_embeddings] Error while normalizing embedding dims: {e}"
         )
         return None
+
     return normalized_embeddings
 
 
@@ -229,18 +234,31 @@ async def _auto_update_encoding(
 
 
 async def _wrapper_queue_data(
-    query_embedding: list, total_retrieved_data: int
+    query_embedding: list[float], total_retrieved_data: int
 ) -> dict | None:
     try:
+        if not isinstance(query_embedding, list) or len(query_embedding) == 0:
+            logging.error(
+                f"[_wrapper_queue_data] Invalid query_embedding: {query_embedding}"
+            )
+            return None
+
+        if not isinstance(total_retrieved_data, int) or total_retrieved_data < 0:
+            logging.error(
+                f"[_wrapper_queue_data] Invalid total_retrieved_data: {total_retrieved_data}"
+            )
+            return None
+
         data = QueueData(
             query_embedding=query_embedding, total_retrieved_data=total_retrieved_data
-        ).dict()
+        ).model_dump()
         logging.info("[_wrapper_queue_data] Created data QueueData wrapper.")
     except Exception as e:
         logging.error(
             f"[_wrapper_queue_data] Error while wrapping QueueData into dictionary: {e}"
         )
         return None
+
     return data
 
 
