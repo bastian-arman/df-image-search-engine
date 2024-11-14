@@ -17,6 +17,7 @@ async def test_normalize_embeddings_with_valid_tensor_cpu() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 async def test_normalize_embeddings_with_valid_tensor_cuda() -> None:
     """Should return normalized numpy array for valid CUDA tensor input."""
     with patch("torch.cuda.is_available", return_value=True), patch(
