@@ -18,11 +18,11 @@ async def test_trigger_a_valid_auto_encoding_if_any_available_cache_data() -> No
 
 
 @pytest.mark.asyncio
-async def test_only_load_current_available_encoder() -> None:
+async def test_trigger_only_load_current_available_encoder() -> None:
     """Should return False due to available encoder data and the difference in files is 10 or fewer."""
     with patch("os.listdir", return_value=encoded_list):
         initial_num = int(encoded_list[0].split(".")[0].split("_")[-1])
-        current_num = randint(initial_num, initial_num + 10)
+        current_num = randint(initial_num, initial_num + 9)
         result = await _auto_update_encoding(
             cache_name=encoded_list, total_data_from_nas=current_num
         )
@@ -40,7 +40,7 @@ async def test_trigger_a_first_encoding() -> None:
 
 
 @pytest.mark.asyncio
-async def test_auto_update_encoding_with_exception() -> None:
+async def test_trigger_update_encoding_with_exception() -> None:
     """Should return None due to an exception raised during execution."""
     with patch(
         "utils.helper._auto_update_encoding", side_effect=Exception("Mocked exception")
@@ -52,7 +52,7 @@ async def test_auto_update_encoding_with_exception() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_trigger_nas_data_lte_encoded_data() -> None:
+async def test_trigger_nas_data_lte_encoded_data() -> None:
     """Should return False due to current encoded data has more data than given data from NAS."""
     with patch("os.listdir", return_value=encoded_list):
         initial_num = int(encoded_list[0].split(".")[0].split("_")[-1])

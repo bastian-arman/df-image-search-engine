@@ -50,14 +50,27 @@ async def _check_multisearch(
     return False
 
 
-async def _check_gpu_avaibility() -> bool | None:
+async def _check_gpu_availability() -> bool | None:
     try:
         if torch.cuda.is_available():
-            logging.info("[_check_gpu_avaibility] CUDA cores available.")
-            return True
+            logging.info("[_check_gpu_availability] CUDA cores available.")
+            if torch.cuda.device_count() > 0:
+                if torch.cuda.get_device_properties(0).total_memory > 0:
+                    logging.info(
+                        "[_check_gpu_availability] GPU device and memory available."
+                    )
+                    return True
+                else:
+                    logging.warning(
+                        "[_check_gpu_availability] GPU device available but no memory."
+                    )
+                    return False
+            else:
+                logging.warning("[_check_gpu_availability] No CUDA devices found.")
+                return False
     except Exception as e:
         logging.info(
-            f"[_check_gpu_avaibility] Error while checking gpu avaibility: {e}"
+            f"[_check_gpu_availability] Error while checking GPU availability: {e}"
         )
         return None
     return False
@@ -84,9 +97,21 @@ async def _check_gpu_memory(is_cuda_available: bool) -> float | None:
 
         total_memory = torch.cuda.get_device_properties(0).total_memory
         allocated_memory = torch.cuda.memory_allocated(0)
-        usage_ratio = allocated_memory / total_memory
 
-        logging.info(f"[_check_gpu_memory] Utilized cuda cores: {usage_ratio:.2f}")
+        if total_memory <= 0:
+            logging.error(
+                "[_check_gpu_memory] Total memory reported as zero or negative."
+            )
+            return None
+
+        if allocated_memory > total_memory:
+            logging.warning(
+                "[_check_gpu_memory] Allocated memory exceeds total memory."
+            )
+            return None
+
+        usage_ratio = allocated_memory / total_memory
+        logging.info(f"[_check_gpu_memory] CUDA memory usage: {usage_ratio:.2f}")
     except Exception as E:
         logging.error(f"[_check_gpu_memory] Error while checking GPU memory: {E}")
         return None
@@ -95,6 +120,24 @@ async def _check_gpu_memory(is_cuda_available: bool) -> float | None:
 
 def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list | None:
     try:
+        if not root_dir and not encoded_list:
+            logging.error(
+                "[_check_already_have_encoded_data] Provided empty encoded list and empty root directory!"
+            )
+            return None
+
+        if not encoded_list:
+            logging.error(
+                "[_check_already_have_encoded_data] No list of encoded data found! Please check the /cache directory."
+            )
+            return None
+
+        if not root_dir:
+            logging.error(
+                "[_check_already_have_encoded_data] No root directory data found! Root directory should be filled with NAS directory."
+            )
+            return None
+
         matching_data = sorted(
             [
                 item
@@ -102,16 +145,11 @@ def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list 
                 if root_dir in item.split("encoded_data_")[1]
             ]
         )
+        print(matching_data)
 
         if not matching_data:
             logging.error(
-                "[_check_already_have_encoded_data] No similar encoder find. Should initialize encode data."
-            )
-            return None
-
-        if not encoded_list:
-            logging.error(
-                "[_check_already_have_encoded_data] No list of encoded data found! Please check the /cache directory.."
+                "[_check_already_have_encoded_data] No similar encoder found. Should initialize encode data."
             )
             return None
 
