@@ -30,7 +30,4 @@ jobs:
         run: |
           sh scripts/run_test.sh
           echo "Unit tests completed successfully."
-
-      - name: Confirm Successful Completion
-        if: success()
-        run: echo "All steps completed successfully!"
+        continue-on-error: false

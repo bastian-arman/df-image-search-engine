@@ -19,9 +19,13 @@ async def test_normalize_embeddings_with_valid_tensor_cpu() -> None:
 @pytest.mark.asyncio
 async def test_normalize_embeddings_with_valid_tensor_cuda() -> None:
     """Should return normalized numpy array for valid CUDA tensor input."""
-    with patch("torch.cuda.is_available", return_value=True):
+    with patch("torch.cuda.is_available", return_value=True), patch(
+        "torch.cuda.current_device", return_value=0
+    ), patch("torch.cuda.device_count", return_value=1):
         tensor_embedding = torch.tensor([[1.0, 2.0], [3.0, 4.0]], device="cuda")
+
         normalized = _normalize_embeddings(tensor_embedding)
+
         assert isinstance(normalized, ndarray)
         assert np.allclose(np.linalg.norm(normalized, axis=1), 1.0)
 

@@ -22,7 +22,10 @@ else
 fi
 
 echo "Running tests"
-coverage run -m --source=tests/ pytest tests/
+if ! coverage run -m pytest --source=tests/ tests/; then
+  echo "Tests failed!"
+  exit 1
+fi
 
 echo "Generating coverage report"
 coverage report -m --skip-empty
