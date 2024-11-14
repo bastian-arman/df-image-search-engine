@@ -104,9 +104,6 @@ def _preprocess_image(image: Image) -> PILImage | None:
     return image
 
 
-print(_preprocess_image(Image.open(("images/Architecture Flow.png"))))
-
-
 def _normalize_embeddings(embeddings: Tensor | ndarray) -> ndarray | None:
     """
     Normalize embedding tensor from range 1 into 0

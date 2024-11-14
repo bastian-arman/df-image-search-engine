@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import torch
+from unittest.mock import patch
 from numpy import ndarray
 from utils.helper import _normalize_embeddings
 
@@ -8,16 +9,17 @@ from utils.helper import _normalize_embeddings
 @pytest.mark.asyncio
 async def test_normalize_embeddings_with_valid_tensor_cpu() -> None:
     """Should return normalized numpy array for valid CPU tensor input."""
-    tensor_embedding = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    normalized = _normalize_embeddings(tensor_embedding)
-    assert isinstance(normalized, ndarray)
-    assert np.allclose(np.linalg.norm(normalized, axis=1), 1.0)
+    with patch("torch.cuda.is_available", return_value=False):
+        tensor_embedding = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+        normalized = _normalize_embeddings(tensor_embedding)
+        assert isinstance(normalized, ndarray)
+        assert np.allclose(np.linalg.norm(normalized, axis=1), 1.0)
 
 
 @pytest.mark.asyncio
 async def test_normalize_embeddings_with_valid_tensor_cuda() -> None:
     """Should return normalized numpy array for valid CUDA tensor input."""
-    if torch.cuda.is_available():
+    with patch("torch.cuda.is_available", return_value=True):
         tensor_embedding = torch.tensor([[1.0, 2.0], [3.0, 4.0]], device="cuda")
         normalized = _normalize_embeddings(tensor_embedding)
         assert isinstance(normalized, ndarray)
