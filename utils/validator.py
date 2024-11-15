@@ -145,7 +145,6 @@ def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list 
                 if root_dir in item.split("encoded_data_")[1]
             ]
         )
-        print(matching_data)
 
         if not matching_data:
             logging.error(

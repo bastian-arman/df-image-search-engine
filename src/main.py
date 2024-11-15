@@ -16,7 +16,7 @@ from utils.validator import (
     _check_gpu_memory,
     _check_already_have_encoded_data,
     _check_multisearch,
-    _check_gpu_avaibility,
+    _check_gpu_availability,
 )
 from utils.helper import (
     _grab_all_images,
@@ -26,6 +26,9 @@ from utils.helper import (
     _auto_update_encoding,
     _search_data,
 )
+
+# TODO: create next and before to see an image
+# TODO: create filter function to return spesific data (e.g: user only wants the return data of 2020 image, or maybe only on 2020/10)
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -134,7 +137,7 @@ async def main() -> None:
 
     start_time = datetime.now()
 
-    is_using_cuda = await _check_gpu_avaibility()
+    is_using_cuda = await _check_gpu_availability()
     resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
     model = init_model(
         device="cuda" if is_using_cuda and resource_usage < 0.75 else "cpu"
@@ -187,7 +190,7 @@ async def main() -> None:
                 key="image_description",
             )
 
-        row_input = st.columns((0.9, 2, 2, 1))
+        row_input = st.columns((1, 2, 2))
         with row_input[0]:
             num_results = st.number_input(
                 label="Total retrieve data",
@@ -215,7 +218,6 @@ async def main() -> None:
 
         if search_button:
             logging.info("[main] Perform image search.")
-            # method = "text_query" if text_query else "image_upload"
 
             query_embedding = (
                 model.encode([text_query], convert_to_tensor=True)
@@ -225,14 +227,6 @@ async def main() -> None:
                     convert_to_tensor=True,
                 )
             )
-
-            # converted_embedding = query_embedding.cpu().detach().numpy().flatten().tolist()
-            # queue_data = await _wrapper_queue_data(
-            #     query_embedding=converted_embedding, total_retrieved_data=num_results
-            # )
-
-            # await _produce_queue(data=queue_data, queue_name=method)
-            # similar_images = await _consume_queue(queue_name=method, image_list=image_list, encoding=normalized_encoding)
 
             similar_images = await _search_data(
                 query_emb=query_embedding,
