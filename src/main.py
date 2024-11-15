@@ -16,19 +16,19 @@ from utils.validator import (
     _check_gpu_memory,
     _check_already_have_encoded_data,
     _check_multisearch,
-    _check_gpu_avaibility,
+    _check_gpu_availability,
 )
 from utils.helper import (
     _grab_all_images,
     _normalize_embeddings,
     _preprocess_image,
-    _search_data,
     _setup_sidebar,
     _auto_update_encoding,
-    _wrapper_queue_data,
-    _produce_image_queue,
-    _produce_text_queue,
+    _search_data,
 )
+
+# TODO: create next and before to see an image
+# TODO: create filter function to return spesific data (e.g: user only wants the return data of 2020 image, or maybe only on 2020/10)
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -137,7 +137,7 @@ async def main() -> None:
 
     start_time = datetime.now()
 
-    is_using_cuda = await _check_gpu_avaibility()
+    is_using_cuda = await _check_gpu_availability()
     resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
     model = init_model(
         device="cuda" if is_using_cuda and resource_usage < 0.75 else "cpu"
@@ -155,6 +155,7 @@ async def main() -> None:
     similar_encoded_data = _check_already_have_encoded_data(
         root_dir=root_dir, encoded_list=list_encoded_data
     )
+
     cache_name = f"encoded_data_{root_dir}_{total_data}"
     should_re_encode = await _auto_update_encoding(
         cache_name=similar_encoded_data, total_data_from_nas=total_data
@@ -189,7 +190,7 @@ async def main() -> None:
                 key="image_description",
             )
 
-        row_input = st.columns((0.9, 2, 2, 1))
+        row_input = st.columns((1, 2, 2))
         with row_input[0]:
             num_results = st.number_input(
                 label="Total retrieve data",
@@ -200,7 +201,10 @@ async def main() -> None:
                 key="total_retrieve",
             )
 
-        disable_search = await _check_multisearch()
+        disable_search = await _check_multisearch(
+            image_description=st.session_state["image_description"],
+            image_uploader=st.session_state["image_uploader"],
+        )
 
         if image_upload and not disable_search:
             st.image(image=image_upload, width=500)
@@ -214,7 +218,7 @@ async def main() -> None:
 
         if search_button:
             logging.info("[main] Perform image search.")
-            method = "text_query" if text_query else "image_upload"
+
             query_embedding = (
                 model.encode([text_query], convert_to_tensor=True)
                 if text_query
@@ -222,15 +226,6 @@ async def main() -> None:
                     [_preprocess_image(Image.open(image_upload))],
                     convert_to_tensor=True,
                 )
-            )
-            converted_embedding = np.array(query_embedding.cpu()).flatten().tolist()
-            queue_data = await _wrapper_queue_data(
-                query_embedding=converted_embedding, total_retrieved_data=num_results
-            )
-            (
-                _produce_text_queue(data=queue_data, queue_name=method)
-                if text_query
-                else _produce_image_queue(data=queue_data, queue_name=method)
             )
 
             similar_images = await _search_data(
@@ -257,8 +252,10 @@ async def main() -> None:
                 else:
                     st.error("No similar images found.")
 
-        end_time = datetime.now()
-        logging.info(f"[main] Elapsed time for search data: {end_time-start_time}")
+                end_time = datetime.now()
+                logging.info(
+                    f"[main] Elapsed time for search data: {end_time-start_time}"
+                )
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None
