@@ -15,7 +15,7 @@ from sentence_transformers.SentenceTransformer import SentenceTransformer as mod
 from utils.validator import (
     _check_gpu_memory,
     _check_already_have_encoded_data,
-    _check_multisearch,
+    _check_uploader,
     _check_gpu_availability,
 )
 from utils.helper import (
@@ -27,8 +27,16 @@ from utils.helper import (
     _search_data,
 )
 
-# TODO: create next and before to see an image
-# TODO: create filter function to return spesific data (e.g: user only wants the return data of 2020 image, or maybe only on 2020/10)
+# TODO: Add image preview logic so user can performed perform next or prev images
+
+if "image_index" not in st.session_state:
+    st.session_state["image_index"] = 0
+
+if "similar_images" not in st.session_state:
+    st.session_state["similar_images"] = None
+
+if "image_filename" not in st.session_state:
+    st.session_state["image_filename"] = None
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -134,8 +142,12 @@ async def main() -> None:
     """
     Main function for streamlit run in asynchronous mode.
     """
-
     start_time = datetime.now()
+
+    root_dir = "PREVIEW_IMAGE"
+    method, is_using_filtered_year = await _setup_sidebar(
+        root_path=f"mounted-nas-do-not-delete-data/{root_dir}"
+    )
 
     is_using_cuda = await _check_gpu_availability()
     resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
@@ -143,7 +155,6 @@ async def main() -> None:
         device="cuda" if is_using_cuda and resource_usage < 0.75 else "cpu"
     )
 
-    root_dir = "PREVIEW_IMAGE"
     image_list = await _grab_all_images(
         root_dir=f"mounted-nas-do-not-delete-data/{root_dir}"
     )
@@ -169,59 +180,50 @@ async def main() -> None:
     normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
     try:
-        await _setup_sidebar()
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.write("#### Search data by image")
-            image_upload = st.file_uploader(
-                label="Choose image file",
-                help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
-                key="image_uploader",
-                type=["jpeg", "jpg", "png"],
-            )
-
-        with col2:
+        if method == "Text Prompt":
             st.write("#### Search data by text")
             text_query = st.text_area(
                 label="Input image description",
                 help="Describe the detail of image you want to search.",
-                key="image_description",
             )
-
-        row_input = st.columns((1, 2, 2))
-        with row_input[0]:
-            num_results = st.number_input(
-                label="Total retrieve data",
-                min_value=1,
-                max_value=100,
-                value=10,
-                help="Input total of image that you want to retrieve, accepted with minimum value is 1 and maximum value as 100.",
-                key="total_retrieve",
+            is_disabled = await _check_uploader(method=method, text_query=text_query)
+        else:
+            st.write("#### Search data by image")
+            image_upload = st.file_uploader(
+                label="Choose image file",
+                help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
+                type=["jpeg", "jpg", "png"],
             )
-
-        disable_search = await _check_multisearch(
-            image_description=st.session_state["image_description"],
-            image_uploader=st.session_state["image_uploader"],
-        )
-
-        if image_upload and not disable_search:
-            st.image(image=image_upload, width=500)
+            if image_upload:
+                st.image(image=image_upload, width=500)
+                st.session_state["image_filename"] = image_upload.name
+            is_disabled = await _check_uploader(
+                method=method, image_upload=image_upload
+            )
 
         search_button = st.button(
             label="Search",
             type="primary",
             help="Search current data into similar image.",
-            disabled=disable_search,
+            disabled=is_disabled,
         )
+
+        st.write(st.session_state)
+
+        specific_year = (
+            st.session_state.get("spesific_year") if is_using_filtered_year else None
+        )
+        if specific_year:
+            logging.info(f"[main] Searching using specific filter {specific_year}.")
+
+        total_retrieved_data = st.session_state.get("total_retrieve")
 
         if search_button:
             logging.info("[main] Perform image search.")
 
             query_embedding = (
                 model.encode([text_query], convert_to_tensor=True)
-                if text_query
+                if method == "Text Prompt"
                 else model.encode(
                     [_preprocess_image(Image.open(image_upload))],
                     convert_to_tensor=True,
@@ -232,8 +234,10 @@ async def main() -> None:
                 query_emb=query_embedding,
                 encoded_data=normalized_encoding,
                 image_paths=image_list,
-                return_data=num_results,
+                return_data=total_retrieved_data,
+                specific_year=specific_year,
             )
+            st.session_state["similar_images"] = similar_images
 
             with st.spinner("Searching for similar images..."):
                 if similar_images:

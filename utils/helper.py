@@ -23,7 +23,7 @@ from pika.exceptions import AMQPConnectionError
 from pika import BlockingConnection, ConnectionParameters, BasicProperties
 
 
-async def _setup_sidebar() -> None:
+async def _setup_sidebar(root_path: str) -> tuple[str, bool] | None:
     """
     Create sidebar project description.
     """
@@ -31,7 +31,38 @@ async def _setup_sidebar() -> None:
         with st.sidebar:
             st.header("Image Similarity Search Engine")
             st.divider()
-            st.subheader("Project Overview")
+
+            method = st.selectbox(
+                label="Select searching method",
+                options=("Image Uploader", "Text Prompt"),
+                help="Select searching method, only available Image Uploader or Text Prompt.",
+            )
+
+            st.number_input(
+                label="Total retrieve data",
+                min_value=1,
+                max_value=100,
+                value=10,
+                help="Input total of image that you want to retrieve, accepted with minimum value is 1 and maximum value as 100.",
+                key="total_retrieve",
+            )
+
+            is_using_filtered_year = st.toggle("Enable filter data source")
+            options = sorted(
+                [year for year in os.listdir(path=root_path) if len(year) == 4]
+            )
+
+            if is_using_filtered_year:
+                st.selectbox(
+                    label="Select data source",
+                    options=options,
+                    help="Focus data search on spesific years of data.",
+                    key="spesific_year",
+                    index=(len(options) - 1),
+                )
+
+            st.divider()
+            st.subheader(body="Project Overview")
             st.write(
                 """
                 This project demonstrates a ***Proof of Concept (PoC)*** for an advanced Image Similarity Search Engine tailored for private datasets.
@@ -41,7 +72,8 @@ async def _setup_sidebar() -> None:
             st.divider()
     except Exception as e:
         logging.error(f"[_setup_sidebar] Error while setup sidebar: {e}")
-    return None
+        return None
+    return method, is_using_filtered_year
 
 
 async def _grab_all_images(root_dir: str) -> list | None:
@@ -150,15 +182,17 @@ async def _search_data(
     encoded_data: ndarray,
     image_paths: list,
     return_data=10,
+    specific_year=None,
 ) -> list | None:
     """
-    Search for similar images based on a precomputed query embedding.
+    Search for similar images based on a precomputed query embedding, with an optional year filter.
 
     Parameters:
     - query_emb: The embedding of the query (text or image).
     - encoded_data: The embeddings of all images in the database.
     - image_paths: The paths of all images in the database, corresponding to the embeddings.
     - return_data: Number of top similar images to return.
+    - specific_year: Filter results based on the year, if provided.
 
     Returns:
     - List of tuples with the image path and similarity score for the top `return_data` similar images.
@@ -166,15 +200,53 @@ async def _search_data(
     try:
         query_emb = _normalize_embeddings(embeddings=query_emb)
         encoded_data = _normalize_embeddings(embeddings=encoded_data)
+
+        if specific_year:
+            logging.info(f"[_search_data] Using {specific_year} filter.")
+            year_filtered_paths = [
+                path
+                for path in image_paths
+                if str(specific_year) in os.path.basename(path)
+            ]
+
+            root_dir = year_filtered_paths[0].split("/")[1]
+            current_dir_data = len(
+                os.listdir(f"mounted-nas-do-not-delete-data/{root_dir}/{specific_year}")
+            )
+
+            if not year_filtered_paths:
+                st.warning(f"No images found for the year {specific_year}.")
+                return None
+
+            filtered_indices = [
+                idx
+                for idx, path in enumerate(image_paths)
+                if path in year_filtered_paths
+            ]
+            filtered_encoded_data = encoded_data[filtered_indices]
+        else:
+            year_filtered_paths = image_paths
+            filtered_encoded_data = encoded_data
+
         hits = util.semantic_search(
             query_embeddings=query_emb,
-            corpus_embeddings=encoded_data,
+            corpus_embeddings=filtered_encoded_data,
             top_k=return_data,
         )[0]
-        similar_images = [(image_paths[hit["corpus_id"]], hit["score"]) for hit in hits]
+
+        similar_images = [
+            (year_filtered_paths[hit["corpus_id"]], hit["score"]) for hit in hits
+        ]
+
+        if len(similar_images) < return_data:
+            st.warning(
+                f"Selected year have {current_dir_data} data, but only {len(similar_images)} similar images found for the selected year."
+            )
+
     except Exception as e:
         logging.error(f"[_search_data] Error while searching data: {e}")
         return None
+
     return similar_images
 
 

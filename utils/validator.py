@@ -1,53 +1,41 @@
 import sys
 import torch
 import streamlit as st
+from typing import Literal
 from pathlib import Path
 from utils.logger import logging
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
-async def _check_multisearch(
-    image_description: str = None, image_uploader: str = None
+async def _check_uploader(
+    method: Literal["Image Uploader", "Text Prompt"],
+    image_upload: UploadedFile = None,
+    text_query: str = None,
 ) -> bool:
-    """Checks if both search methods are used, returning True if so to disable the search button."""
-    description = (
-        image_description
-        if image_description is not None
-        else st.session_state.get("image_description")
-    )
-    uploader = (
-        image_uploader
-        if image_uploader is not None
-        else st.session_state.get("image_uploader")
-    )
-
-    try:
-        if description and uploader:
-            logging.error("Error multi-method.")
-            st.error("Error multi-method: Only one search method should be selected.")
-            return True
-        if not description and not uploader:
-            logging.warning("No data inputted.")
-            st.warning(
-                "Warning: Please upload data or fill image description to perform image search."
-            )
-            return True
-        if description and description.strip() == "" and uploader:
-            logging.info("Using upload image method.")
-            st.success("Success input data.")
-            return False
-        if description and description.strip() == "":
-            logging.error("Only whitespace detected in image description.")
-            st.error("Error: Image description cannot contain only spaces.")
-            return True
-    except Exception as e:
-        logging.error(
-            f"[_check_multisearch] Error exception while check multisearch: {e}"
-        )
-        return None
-    st.success("Success input data.")
-    return False
+    if method == "Text Prompt" and not text_query:
+        logging.warning("No data inputted.")
+        st.warning("Warning: Please fill image description to perform image search.")
+        return True
+    if method == "Image Uploader" and not image_upload:
+        logging.warning("No data inputted.")
+        st.warning("Warning: Please upload data to perform image search.")
+        return True
+    if method == "Text Prompt" and text_query.strip() == "":
+        logging.error("Only whitespace detected in image description.")
+        logging.info("Image description cannot contain only spaces.")
+        st.error("Error: Image description cannot contain only spaces.")
+        return True
+    if method == "Text Prompt" and text_query.strip() != "":
+        logging.info("Using upload text prompt method.")
+        st.success("Success input text data.")
+        return False
+    if method == "Image Uploader" and image_upload:
+        logging.info("Using upload image method.")
+        st.success("Success uploading image data.")
+        return False
+    return True
 
 
 async def _check_gpu_availability() -> bool | None:
@@ -147,7 +135,7 @@ def _check_already_have_encoded_data(root_dir: str, encoded_list: list) -> list 
         )
 
         if not matching_data:
-            logging.error(
+            logging.warning(
                 "[_check_already_have_encoded_data] No similar encoder found. Should initialize encode data."
             )
             return None
