@@ -15,7 +15,7 @@ from sentence_transformers.SentenceTransformer import SentenceTransformer as mod
 from utils.validator import (
     _check_gpu_memory,
     _check_already_have_encoded_data,
-    _check_multisearch,
+    _check_uploader,
     _check_gpu_availability,
 )
 from utils.helper import (
@@ -26,9 +26,6 @@ from utils.helper import (
     _auto_update_encoding,
     _search_data,
 )
-
-# TODO: create next and before to see an image
-# TODO: create filter function to return spesific data (e.g: user only wants the return data of 2020 image, or maybe only on 2020/10)
 
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
@@ -45,6 +42,19 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+if "current_image_index" not in st.session_state:
+    st.session_state["current_image_index"] = 0
+if "next_button" not in st.session_state:
+    st.session_state["next_button"] = False
+if "prev_button" not in st.session_state:
+    st.session_state["prev_button"] = False
+if "similar_images" not in st.session_state:
+    st.session_state["similar_images"] = None
+if "current_uploaded_image" not in st.session_state:
+    st.session_state["current_uploaded_image"] = None
+if "current_text_query" not in st.session_state:
+    st.session_state["current_text_query"] = None
 
 
 @st.cache_resource
@@ -134,8 +144,12 @@ async def main() -> None:
     """
     Main function for streamlit run in asynchronous mode.
     """
-
     start_time = datetime.now()
+
+    root_dir = "PREVIEW_IMAGE"
+    method, is_using_filtered_year = await _setup_sidebar(
+        root_path=f"mounted-nas-do-not-delete-data/{root_dir}"
+    )
 
     is_using_cuda = await _check_gpu_availability()
     resource_usage = await _check_gpu_memory(is_cuda_available=is_using_cuda)
@@ -143,7 +157,6 @@ async def main() -> None:
         device="cuda" if is_using_cuda and resource_usage < 0.75 else "cpu"
     )
 
-    root_dir = "PREVIEW_IMAGE"
     image_list = await _grab_all_images(
         root_dir=f"mounted-nas-do-not-delete-data/{root_dir}"
     )
@@ -169,59 +182,49 @@ async def main() -> None:
     normalized_encoding = _normalize_embeddings(embeddings=encoded_data)
 
     try:
-        await _setup_sidebar()
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.write("#### Search data by image")
-            image_upload = st.file_uploader(
-                label="Choose image file",
-                help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
-                key="image_uploader",
-                type=["jpeg", "jpg", "png"],
-            )
-
-        with col2:
+        if method == "Text Prompt":
             st.write("#### Search data by text")
             text_query = st.text_area(
                 label="Input image description",
                 help="Describe the detail of image you want to search.",
-                key="image_description",
+            )
+            is_disabled = await _check_uploader(method=method, text_query=text_query)
+
+        else:
+            st.write("#### Search data by image")
+            image_upload = st.file_uploader(
+                label="Choose image file",
+                help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
+                type=["jpeg", "jpg", "png"],
             )
 
-        row_input = st.columns((1, 2, 2))
-        with row_input[0]:
-            num_results = st.number_input(
-                label="Total retrieve data",
-                min_value=1,
-                max_value=100,
-                value=10,
-                help="Input total of image that you want to retrieve, accepted with minimum value is 1 and maximum value as 100.",
-                key="total_retrieve",
+            if image_upload:
+                st.image(image=image_upload, width=500)
+            is_disabled = await _check_uploader(
+                method=method, image_upload=image_upload
             )
-
-        disable_search = await _check_multisearch(
-            image_description=st.session_state["image_description"],
-            image_uploader=st.session_state["image_uploader"],
-        )
-
-        if image_upload and not disable_search:
-            st.image(image=image_upload, width=500)
 
         search_button = st.button(
             label="Search",
             type="primary",
             help="Search current data into similar image.",
-            disabled=disable_search,
+            disabled=is_disabled,
         )
+
+        specific_year = (
+            st.session_state.get("spesific_year") if is_using_filtered_year else None
+        )
+        if specific_year:
+            logging.info(f"[main] Searching using specific filter {specific_year}.")
+
+        total_retrieved_data = st.session_state.get("total_retrieve")
 
         if search_button:
             logging.info("[main] Perform image search.")
 
             query_embedding = (
                 model.encode([text_query], convert_to_tensor=True)
-                if text_query
+                if method == "Text Prompt"
                 else model.encode(
                     [_preprocess_image(Image.open(image_upload))],
                     convert_to_tensor=True,
@@ -232,30 +235,60 @@ async def main() -> None:
                 query_emb=query_embedding,
                 encoded_data=normalized_encoding,
                 image_paths=image_list,
-                return_data=num_results,
+                return_data=total_retrieved_data,
+                specific_year=specific_year,
             )
 
-            with st.spinner("Searching for similar images..."):
-                if similar_images:
-                    st.write("### Similar Images Found")
-                    for i in range(0, len(similar_images), 4):
-                        cols = st.columns(4)
-                        for idx, (img_path, score) in enumerate(
-                            similar_images[i : i + 4]
-                        ):
-                            with cols[idx]:
-                                st.image(
-                                    image=img_path,
-                                    use_container_width=True,
-                                    caption=f"Image path: {img_path}",
-                                )
-                else:
-                    st.error("No similar images found.")
-
-                end_time = datetime.now()
+            if similar_images:
+                st.session_state["similar_images"] = similar_images
                 logging.info(
-                    f"[main] Elapsed time for search data: {end_time-start_time}"
+                    "[main] Similar images found. Use navigation to browse them."
                 )
+            else:
+                st.error("No similar images found. Please perform a new search.")
+
+        if st.session_state["similar_images"]:
+            similar_images = st.session_state["similar_images"]
+            current_image_index = st.session_state["current_image_index"]
+            current_image, current_score = similar_images[current_image_index]
+
+            st.write("### Detailed Image Preview")
+            with st.expander("View Selected Image"):
+                st.image(
+                    image=current_image,
+                    caption=f"Image path: {current_image}",
+                    use_container_width=True,
+                )
+
+                prev_btn = st.button("Previous", key="prev_button")
+                next_btn = st.button("Next", key="next_button")
+
+                if prev_btn:
+                    st.session_state.current_image_index = (
+                        st.session_state.current_image_index - 1
+                    ) % len(similar_images)
+
+                if next_btn:
+                    st.session_state.current_image_index = (
+                        st.session_state.current_image_index + 1
+                    ) % len(similar_images)
+
+            st.write("### Similar Images Found")
+            for i in range(0, len(similar_images), 3):
+                cols = st.columns(3)
+                for idx, (img_path, score) in enumerate(similar_images[i : i + 3]):
+                    with cols[idx]:
+                        st.image(
+                            image=img_path,
+                            use_container_width=True,
+                            caption=f"Image path: {img_path}, Score: {score:.2f}",
+                        )
+
+            end_time = datetime.now()
+            logging.info(
+                f"[main] Finised search similar image estimate time: {end_time-start_time}"
+            )
+
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None

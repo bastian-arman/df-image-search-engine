@@ -73,7 +73,9 @@ This project is developed using WSL (Ubuntu 24.04.1 LTS on Windows 10) with Pyth
 # Project Features
 - [x] Search similar images by uploading an image (image based).
 - [x] Search similar images by describing an image (text based).
-- [x] Auto encode when user uploading new data (10 image) into NAS.
+- [x] Auto encode when user uploading new data (30 image) into NAS.
+- [x] Navigate into spesific image files.
+- [x] Filter spesific data source.
 
 # Project Development
 - [x] Develop at least 5 test case for all function.
