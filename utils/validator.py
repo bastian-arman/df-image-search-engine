@@ -17,22 +17,39 @@ async def _check_uploader(
     if method == "Text Prompt" and not text_query:
         logging.warning("No data inputted.")
         st.warning("Warning: Please fill image description to perform image search.")
+        st.session_state["similar_images"] = None
+        st.session_state["current_image_index"] = 0
         return True
     if method == "Image Uploader" and not image_upload:
         logging.warning("No data inputted.")
         st.warning("Warning: Please upload data to perform image search.")
+        st.session_state["similar_images"] = None
+        st.session_state["current_image_index"] = 0
         return True
     if method == "Text Prompt" and text_query.strip() == "":
         logging.error("Only whitespace detected in image description.")
         logging.info("Image description cannot contain only spaces.")
         st.error("Error: Image description cannot contain only spaces.")
+        st.session_state["similar_images"] = None
+        st.session_state["current_image_index"] = 0
         return True
     if method == "Text Prompt" and text_query.strip() != "":
-        logging.info("Using upload text prompt method.")
+        current_text = st.session_state.get("current_text_query", None)
+        if current_text != text_query.strip():
+            logging.info("New text prompt detected. Resetting session state.")
+            st.session_state["similar_images"] = None
+            st.session_state["current_image_index"] = 0
+        st.session_state["current_text_query"] = text_query.strip()
         st.success("Success input text data.")
         return False
+
     if method == "Image Uploader" and image_upload:
-        logging.info("Using upload image method.")
+        current_image = st.session_state.get("current_uploaded_image", None)
+        if current_image != image_upload.name:
+            logging.info("New image uploaded. Resetting session state.")
+            st.session_state["similar_images"] = None
+            st.session_state["current_image_index"] = 0
+        st.session_state["current_uploaded_image"] = image_upload.name
         st.success("Success uploading image data.")
         return False
     return True

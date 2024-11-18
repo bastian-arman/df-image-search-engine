@@ -27,17 +27,6 @@ from utils.helper import (
     _search_data,
 )
 
-# TODO: Add image preview logic so user can performed perform next or prev images
-
-if "image_index" not in st.session_state:
-    st.session_state["image_index"] = 0
-
-if "similar_images" not in st.session_state:
-    st.session_state["similar_images"] = None
-
-if "image_filename" not in st.session_state:
-    st.session_state["image_filename"] = None
-
 st.set_page_config(layout="wide", page_title="Dfactory Image Similarity Search")
 st.markdown(
     """
@@ -53,6 +42,19 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+if "current_image_index" not in st.session_state:
+    st.session_state["current_image_index"] = 0
+if "next_button" not in st.session_state:
+    st.session_state["next_button"] = False
+if "prev_button" not in st.session_state:
+    st.session_state["prev_button"] = False
+if "similar_images" not in st.session_state:
+    st.session_state["similar_images"] = None
+if "current_uploaded_image" not in st.session_state:
+    st.session_state["current_uploaded_image"] = None
+if "current_text_query" not in st.session_state:
+    st.session_state["current_text_query"] = None
 
 
 @st.cache_resource
@@ -187,6 +189,7 @@ async def main() -> None:
                 help="Describe the detail of image you want to search.",
             )
             is_disabled = await _check_uploader(method=method, text_query=text_query)
+
         else:
             st.write("#### Search data by image")
             image_upload = st.file_uploader(
@@ -194,9 +197,9 @@ async def main() -> None:
                 help="Accepted only 1 image data with extensions such as 'jpeg', 'jpg', 'png'.",
                 type=["jpeg", "jpg", "png"],
             )
+
             if image_upload:
                 st.image(image=image_upload, width=500)
-                st.session_state["image_filename"] = image_upload.name
             is_disabled = await _check_uploader(
                 method=method, image_upload=image_upload
             )
@@ -207,8 +210,6 @@ async def main() -> None:
             help="Search current data into similar image.",
             disabled=is_disabled,
         )
-
-        st.write(st.session_state)
 
         specific_year = (
             st.session_state.get("spesific_year") if is_using_filtered_year else None
@@ -237,29 +238,57 @@ async def main() -> None:
                 return_data=total_retrieved_data,
                 specific_year=specific_year,
             )
-            st.session_state["similar_images"] = similar_images
 
-            with st.spinner("Searching for similar images..."):
-                if similar_images:
-                    st.write("### Similar Images Found")
-                    for i in range(0, len(similar_images), 4):
-                        cols = st.columns(4)
-                        for idx, (img_path, score) in enumerate(
-                            similar_images[i : i + 4]
-                        ):
-                            with cols[idx]:
-                                st.image(
-                                    image=img_path,
-                                    use_container_width=True,
-                                    caption=f"Image path: {img_path}",
-                                )
-                else:
-                    st.error("No similar images found.")
-
-                end_time = datetime.now()
+            if similar_images:
+                st.session_state["similar_images"] = similar_images
                 logging.info(
-                    f"[main] Elapsed time for search data: {end_time-start_time}"
+                    "[main] Similar images found. Use navigation to browse them."
                 )
+            else:
+                st.error("No similar images found. Please perform a new search.")
+
+        if st.session_state["similar_images"]:
+            similar_images = st.session_state["similar_images"]
+            current_image_index = st.session_state["current_image_index"]
+            current_image, current_score = similar_images[current_image_index]
+
+            st.write("### Detailed Image Preview")
+            with st.expander("View Selected Image"):
+                st.image(
+                    image=current_image,
+                    caption=f"Image path: {current_image}",
+                    use_container_width=True,
+                )
+
+                prev_btn = st.button("Previous", key="prev_button")
+                next_btn = st.button("Next", key="next_button")
+
+                if prev_btn:
+                    st.session_state.current_image_index = (
+                        st.session_state.current_image_index - 1
+                    ) % len(similar_images)
+
+                if next_btn:
+                    st.session_state.current_image_index = (
+                        st.session_state.current_image_index + 1
+                    ) % len(similar_images)
+
+            st.write("### Similar Images Found")
+            for i in range(0, len(similar_images), 3):
+                cols = st.columns(3)
+                for idx, (img_path, score) in enumerate(similar_images[i : i + 3]):
+                    with cols[idx]:
+                        st.image(
+                            image=img_path,
+                            use_container_width=True,
+                            caption=f"Image path: {img_path}, Score: {score:.2f}",
+                        )
+
+            end_time = datetime.now()
+            logging.info(
+                f"[main] Finised search similar image estimate time: {end_time-start_time}"
+            )
+
     except Exception as e:
         st.error(f"[main] Error while executing main file: {e}")
     return None

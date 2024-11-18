@@ -209,11 +209,6 @@ async def _search_data(
                 if str(specific_year) in os.path.basename(path)
             ]
 
-            root_dir = year_filtered_paths[0].split("/")[1]
-            current_dir_data = len(
-                os.listdir(f"mounted-nas-do-not-delete-data/{root_dir}/{specific_year}")
-            )
-
             if not year_filtered_paths:
                 st.warning(f"No images found for the year {specific_year}.")
                 return None
@@ -240,7 +235,7 @@ async def _search_data(
 
         if len(similar_images) < return_data:
             st.warning(
-                f"Selected year have {current_dir_data} data, but only {len(similar_images)} similar images found for the selected year."
+                f"Only {len(similar_images)} similar images found for the year {specific_year}."
             )
 
     except Exception as e:
@@ -287,11 +282,13 @@ async def _auto_update_encoding(
             )
             return False
 
-        if diff >= 10:
+        if diff >= 30:
             logging.info(
                 "[_auto_update_encoding] Perform re-encode process due to triggered by additional data in NAS."
             )
-            st.warning("Significant data change detected. Re-running encoding process.")
+            st.warning(
+                "Significant data change detected on NAS. Trigger auto encoding process."
+            )
             return True
 
     except Exception as e:
